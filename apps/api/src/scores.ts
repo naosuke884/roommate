@@ -89,7 +89,7 @@ export function parseScore(body: unknown, game: Game, now: number): ScoreInput |
   const { day, score, durationMs } = body as Record<string, unknown>;
 
   if (typeof day !== 'string' || !isDay(day)) return 'invalid_day';
-  // コースの日付はクライアントの時間帯で決まるので、サーバーの日付の前後 1 日まで認める
+  // コースの日付はゲームが送る。時計のずれや日付の変わり目を見込み、サーバーの日付の前後 1 日まで認める
   const dayStart = Date.parse(`${day}T00:00:00Z`);
   if (dayStart < now - 2 * DAY_MS || dayStart > now + DAY_MS) return 'day_out_of_range';
 
