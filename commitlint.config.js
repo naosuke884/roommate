@@ -1,5 +1,7 @@
 export default {
   extends: ['@commitlint/config-conventional'],
+  // Dependabot の本文はリリースノートの長い行を含むので検査しない
+  ignores: [(message) => /^Signed-off-by: dependabot\[bot\]/m.test(message)],
   plugins: [
     {
       rules: {
