@@ -1,25 +1,8 @@
-import { env, exports } from 'cloudflare:workers';
+import { env } from 'cloudflare:workers';
 import { sign } from 'hono/jwt';
 import { describe, expect, it } from 'vitest';
 import { TOKEN_TTL_SECONDS, issuePlayerToken } from '../src/auth.ts';
-
-interface TokenBody {
-  playerId: string;
-  token: string;
-  expiresAt: number;
-}
-
-function request(path: string, init: RequestInit & { token?: string } = {}) {
-  const headers = new Headers(init.headers);
-  if (init.token) headers.set('Authorization', `Bearer ${init.token}`);
-  return exports.default.fetch(new Request(`https://api.example${path}`, { ...init, headers }));
-}
-
-async function issue(ip = '203.0.113.1') {
-  const res = await request('/players', { method: 'POST', headers: { 'CF-Connecting-IP': ip } });
-  expect(res.status).toBe(201);
-  return res.json<TokenBody>();
-}
+import { type TokenBody, issuePlayer as issue, request } from './helpers.ts';
 
 describe('POST /players', () => {
   it('新しい ID を発行して保存し、30 日有効なトークンを返す', async () => {

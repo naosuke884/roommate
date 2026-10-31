@@ -2,6 +2,7 @@ import { games, playOrigin, siteOrigin } from '@roommate/catalog';
 import { type Context, Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { players } from './players.ts';
+import { scores } from './scores.ts';
 
 const app = new Hono<{ Bindings: Env }>();
 
@@ -28,5 +29,6 @@ app.get('/health', (c) => c.json({ ok: true }));
 app.get('/games', (c) => c.json({ games }));
 
 app.route('/players', players);
+app.route('/', scores);
 
 export default app;
