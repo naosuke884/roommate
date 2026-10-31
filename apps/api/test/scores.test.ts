@@ -61,12 +61,13 @@ describe('POST /games/:slug/scores', () => {
   it('同じプレイヤーが短時間に送りすぎると 429 を返す', async () => {
     const { token } = await issuePlayer();
     const statuses: number[] = [];
-    for (let i = 0; i < 11; i++) {
+    // 上限は 1 分ごとの窓で数えるので、途中で窓が切り替わっても 1 つの窓で上限を超えるだけ送る
+    for (let i = 0; i < 21; i++) {
       const res = await submit(token, { day: today(), score: i, durationMs: 60_000 });
       statuses.push(res.status);
     }
     expect(statuses.slice(0, 10).every((s) => s === 201)).toBe(true);
-    expect(statuses[10]).toBe(429);
+    expect(statuses).toContain(429);
   });
 });
 

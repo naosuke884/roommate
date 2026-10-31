@@ -27,7 +27,8 @@ describe('POST /players', () => {
   it('同じ IP から短時間に呼びすぎると 429 を返す', async () => {
     const ip = '203.0.113.99';
     const statuses: number[] = [];
-    for (let i = 0; i < 11; i++) {
+    // 上限は 1 分ごとの窓で数えるので、途中で窓が切り替わっても 1 つの窓で上限を超えるだけ送る
+    for (let i = 0; i < 21; i++) {
       const res = await request('/players', {
         method: 'POST',
         headers: { 'CF-Connecting-IP': ip },
@@ -35,7 +36,7 @@ describe('POST /players', () => {
       statuses.push(res.status);
     }
     expect(statuses.slice(0, 10).every((s) => s === 201)).toBe(true);
-    expect(statuses[10]).toBe(429);
+    expect(statuses).toContain(429);
   });
 });
 
