@@ -5,6 +5,11 @@ updates:
     directory: /
     schedule:
       interval: weekly
+    ignore:
+      # typescript-eslint が TypeScript 7 に対応するまで、メジャー更新は取らない
+      # https://github.com/typescript-eslint/typescript-eslint/issues/10940
+      - dependency-name: typescript
+        update-types: ['version-update:semver-major']
     groups:
       npm:
         patterns: ['*']
