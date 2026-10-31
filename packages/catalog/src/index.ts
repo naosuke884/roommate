@@ -18,7 +18,7 @@ export const games: readonly Game[] = [
     slug: 'browser-game-1',
     title: 'browser-game-1',
     description: '日替わりのコースを走り、同じコースを走った人と自己ベストを競う。',
-    maxScorePerSecond: 50,
+    maxScorePerSecond: 500,
   },
 ];
 
