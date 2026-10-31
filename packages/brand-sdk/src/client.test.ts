@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { Client, type ClientOptions, localDay } from './client.ts';
+import { Client, type ClientOptions, courseDay } from './client.ts';
 
 const API = 'https://api.example';
-const NOW = new Date('2026-06-15T12:00:00');
+const NOW = new Date('2026-06-15T12:00:00Z');
 const nowSeconds = Math.floor(NOW.getTime() / 1000);
 
 interface Call {
@@ -111,7 +111,7 @@ describe('Client', () => {
     expect(await c.token()).toBe('new-token');
   });
 
-  it('スコアは端末の日付と一緒に送り、自己ベストは送る前に手元で上げる', async () => {
+  it('スコアはコースの日付と一緒に送り、自己ベストは送る前に手元で上げる', async () => {
     const api = fakeApi({
       'POST /players': () => [201, issued],
       'GET /games/g/scores/me': () => [200, { best: 100 }],
@@ -171,8 +171,11 @@ describe('Client', () => {
   });
 });
 
-describe('localDay', () => {
-  it('端末の時間帯での日付を返す', () => {
-    expect(localDay(new Date(2026, 0, 5, 23, 59))).toBe('2026-01-05');
+describe('courseDay', () => {
+  it('端末の時間帯にかかわらず UTC の日付を返す', () => {
+    expect(courseDay(new Date('2026-01-05T23:30:00+09:00'))).toBe('2026-01-05');
+    // 日本時間の 0〜9 時は、まだ前日のコース
+    expect(courseDay(new Date('2026-01-06T08:59:00+09:00'))).toBe('2026-01-05');
+    expect(courseDay(new Date('2026-01-06T09:00:00+09:00'))).toBe('2026-01-06');
   });
 });

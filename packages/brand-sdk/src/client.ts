@@ -63,7 +63,7 @@ export class Client {
     const res = await this.options.fetch(`${this.gamePath()}/scores`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${player.token}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ day: localDay(this.now()), score, durationMs }),
+      body: JSON.stringify({ day: courseDay(this.now()), score, durationMs }),
     });
     if (res.ok) {
       const { best } = (await res.json()) as { best: number | null };
@@ -154,10 +154,7 @@ export class Client {
   }
 }
 
-/** 端末の時間帯での日付。コースの日付と同じ決め方にする */
-export function localDay(date: Date): string {
-  const y = date.getFullYear();
-  const m = String(date.getMonth() + 1).padStart(2, '0');
-  const d = String(date.getDate()).padStart(2, '0');
-  return `${y}-${m}-${d}`;
+/** コースの日付。ゲームのコースは UTC の日付で切り替わるので、それに合わせる */
+export function courseDay(date: Date): string {
+  return date.toISOString().slice(0, 10);
 }

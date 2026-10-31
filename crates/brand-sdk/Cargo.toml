@@ -1,6 +1,6 @@
 [package]
 name = "brand-sdk"
-version = "0.1.1"
+version = "0.1.2"
 edition = "2021"
 publish = false
 description = "roommate のゲームから匿名 ID・スコア・自己ベストを使う"
