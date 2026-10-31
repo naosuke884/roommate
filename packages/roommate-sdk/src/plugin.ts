@@ -9,6 +9,9 @@ declare function miniquad_add_plugin(plugin: {
   version: number;
 }): void;
 
+// macroquad の JS ローダーが置く、wasm の線形メモリ
+declare const wasm_memory: WebAssembly.Memory;
+
 declare global {
   interface Window {
     roommate?: { client: Client };
@@ -52,6 +55,27 @@ miniquad_add_plugin({
     importObject.env.roommate_best_score = () => client.bestScore() ?? -1;
     importObject.env.roommate_submit_score = (score: number, durationMs: number) => {
       void client.submitScore(score, durationMs);
+    };
+
+    // ランキング。wasm へは数値しか渡せないので、1 件ずつ番号で読ませる
+    const ready = () => {
+      const state = client.rankingState();
+      return state.status === 'ready' ? state : undefined;
+    };
+    const RANKING_STATUS = { idle: 0, loading: 1, ready: 2, failed: 3 } as const;
+    importObject.env.roommate_request_ranking = () => {
+      void client.requestRanking();
+    };
+    importObject.env.roommate_ranking_status = () => RANKING_STATUS[client.rankingState().status];
+    importObject.env.roommate_ranking_len = () => ready()?.entries.length ?? 0;
+    importObject.env.roommate_ranking_my_rank = () => ready()?.myRank ?? -1;
+    importObject.env.roommate_ranking_rank = (i: number) => ready()?.entries[i]?.rank ?? 0;
+    importObject.env.roommate_ranking_score = (i: number) => ready()?.entries[i]?.score ?? 0;
+    // 名前を UTF-8 で ptr から cap バイトまで書き、名前の全体のバイト数を返す
+    importObject.env.roommate_ranking_name = (i: number, ptr: number, cap: number) => {
+      const bytes = new TextEncoder().encode(ready()?.entries[i]?.name ?? '');
+      new Uint8Array(wasm_memory.buffer, ptr, cap).set(bytes.subarray(0, cap));
+      return bytes.length;
     };
   },
 });

@@ -15,6 +15,24 @@ interface StoredPlayer {
   expiresAt: number;
 }
 
+export interface RankingEntry {
+  rank: number;
+  name: string;
+  score: number;
+}
+
+export type RankingState =
+  | { status: 'idle' }
+  | { status: 'loading' }
+  | { status: 'failed' }
+  | {
+      status: 'ready';
+      day: string;
+      entries: RankingEntry[];
+      /** 自分のその日の順位。その日のスコアが無いか、ID が無ければ null */
+      myRank: number | null;
+    };
+
 interface PendingScore {
   day: string;
   score: number;
@@ -34,6 +52,8 @@ export class Client {
   private best: number | undefined;
   private ready: Promise<StoredPlayer | undefined>;
   private flushing: Promise<void> | undefined;
+  private rankingValue: RankingState = { status: 'idle' };
+  private rankingLoad: Promise<void> | undefined;
   private readonly bestKey: string;
   private readonly pendingKey: string;
   private readonly now: () => Date;
@@ -55,6 +75,58 @@ export class Client {
   /** 全期間の自己ベスト。まだわからなければ undefined */
   bestScore(): number | undefined {
     return this.best;
+  }
+
+  /** 最後に頼んだランキングの状態 */
+  rankingState(): RankingState {
+    return this.rankingValue;
+  }
+
+  /**
+   * 今のコースの日付のランキングと自分の順位を読む。結果は rankingState() で読む。
+   * 読んでいる間にもう一度呼んでも、二重には読まない
+   */
+  requestRanking(): Promise<void> {
+    if (this.rankingValue.status === 'loading' && this.rankingLoad) return this.rankingLoad;
+    this.rankingValue = { status: 'loading' };
+    this.rankingLoad = this.loadRanking()
+      .then((state) => {
+        this.rankingValue = state;
+      })
+      .catch(() => {
+        this.rankingValue = { status: 'failed' };
+      });
+    return this.rankingLoad;
+  }
+
+  private async loadRanking(): Promise<RankingState> {
+    const day = courseDay(this.now());
+    // 送ったばかりのスコアが順位に入るよう、残っているスコアを先に送る
+    await this.flush().catch(() => {});
+    const [ranking, myRank] = await Promise.all([
+      this.options
+        .fetch(`${this.gamePath()}/rankings/${day}`, { cache: 'no-cache' })
+        .then(async (res) => {
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          return ((await res.json()) as { entries: RankingEntry[] }).entries;
+        }),
+      this.loadMyRank(day),
+    ]);
+    return { status: 'ready', day, entries: ranking, myRank };
+  }
+
+  private async loadMyRank(day: string): Promise<number | null> {
+    const player = await this.ready;
+    if (!player) return null;
+    try {
+      const res = await this.options.fetch(`${this.gamePath()}/scores/me?day=${day}`, {
+        headers: { Authorization: `Bearer ${player.token}` },
+      });
+      if (!res.ok) return null;
+      return ((await res.json()) as { rank?: number | null }).rank ?? null;
+    } catch {
+      return null;
+    }
   }
 
   /** ほかの JS(影の通信など)がトークンを使うとき用。取れなければ undefined */

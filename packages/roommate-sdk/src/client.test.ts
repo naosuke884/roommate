@@ -292,6 +292,53 @@ describe('Client', () => {
     );
   });
 
+  it('今日のランキングと自分の順位を読む', async () => {
+    const entries = [{ rank: 1, name: '名無し#aaaa', score: 900 }];
+    const api = fakeApi({
+      'POST /players': () => [201, issued],
+      'GET /games/g/scores/me': (call) => {
+        expect(call.auth).toBe('Bearer new-token');
+        return [200, { best: 300, rank: 57 }];
+      },
+      'GET /games/g/rankings/2026-06-15': () => [200, { day: '2026-06-15', entries }],
+    });
+    const c = client(api);
+    expect(c.rankingState()).toEqual({ status: 'idle' });
+
+    const loading = c.requestRanking();
+    expect(c.rankingState()).toEqual({ status: 'loading' });
+    await loading;
+
+    expect(c.rankingState()).toEqual({ status: 'ready', day: '2026-06-15', entries, myRank: 57 });
+    expect(api.calls.some((call) => call.path === '/games/g/scores/me')).toBe(true);
+  });
+
+  it('ランキングを読めなければ failed にする', async () => {
+    const api = fakeApi({
+      'POST /players': () => [201, issued],
+      'GET /games/g/scores/me': () => [200, { best: null }],
+      'GET /games/g/rankings/2026-06-15': () => [503, { error: 'unavailable' }],
+    });
+    const c = client(api);
+    await c.requestRanking();
+    expect(c.rankingState()).toEqual({ status: 'failed' });
+  });
+
+  it('ID が無くても、ランキングは自分の順位なしで読む', async () => {
+    const api = fakeApi({
+      'POST /players': () => [503, { error: 'unavailable' }],
+      'GET /games/g/rankings/2026-06-15': () => [200, { day: '2026-06-15', entries: [] }],
+    });
+    const c = client(api);
+    await c.requestRanking();
+    expect(c.rankingState()).toEqual({
+      status: 'ready',
+      day: '2026-06-15',
+      entries: [],
+      myRank: null,
+    });
+  });
+
   it('localStorage が例外を投げても止まらない', async () => {
     const throwing = {
       getItem: () => {
