@@ -4,6 +4,10 @@
   "main": "src/index.ts",
   "compatibility_date": "2026-10-23",
   "workers_dev": false,
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 1,
+  },
   // ホスト名は packages/catalog の playOrigin と揃える
   "routes": [{ "pattern": "play.roommate.hayashi-naoki.com", "custom_domain": true }],
   "r2_buckets": [
