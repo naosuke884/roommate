@@ -1,5 +1,5 @@
 ---
-import { games, type Game } from '@roommate/catalog';
+import { games, playUrl, type Game } from '@roommate/catalog';
 import Ranking from '../../components/Ranking.tsx';
 import { API_ORIGIN } from '../../config.ts';
 import Base from '../../layouts/Base.astro';
@@ -19,6 +19,19 @@ const { game } = Astro.props;
   <h1>{game.title}</h1>
   <p class="description">{game.description}</p>
 
+  <!--
+    ゲームは配信用の別 origin から読む。allow-same-origin はゲーム自身の origin の
+    localStorage と API の CORS に要る。サイトとは origin が違うので、サイトの中身には触れない
+  -->
+  <iframe
+    class="game"
+    src={playUrl(game.slug)}
+    title={game.title}
+    sandbox="allow-scripts allow-same-origin"
+    allow="fullscreen"
+    loading="eager"
+  ></iframe>
+
   <section>
     <h2>今日のランキング</h2>
     <Ranking client:load apiOrigin={API_ORIGIN} game={game.slug} />
@@ -26,6 +39,14 @@ const { game } = Astro.props;
 </Base>
 
 <style>
+  .game {
+    display: block;
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    border: 0;
+    background: #000;
+  }
+
   .description {
     color: var(--muted);
   }
