@@ -5,6 +5,7 @@ dist/
 .turbo/
 .dev.vars
 .pnpm-store/
+target/
 worker-configuration.d.ts
 
 # ゲームはタグの brand-sdk.js をそのまま取り込むので、ビルドしたものも commit する
