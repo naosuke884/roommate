@@ -16,12 +16,16 @@ export default defineConfig({
     csp: {
       directives: [
         "default-src 'self'",
-        `connect-src 'self' ${apiOrigin}`,
+        `connect-src 'self' ${apiOrigin} https://cloudflareinsights.com`,
         "img-src 'self' data:",
         "object-src 'none'",
         "base-uri 'self'",
         "form-action 'self'",
       ],
+      // Cloudflare Web Analytics が配信時に差し込む beacon を許す
+      scriptDirective: {
+        resources: ["'self'", 'https://static.cloudflareinsights.com'],
+      },
     },
   },
 });
