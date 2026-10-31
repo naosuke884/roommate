@@ -15,8 +15,8 @@ export interface Game {
 
 export const games: readonly Game[] = [
   {
-    slug: 'browser-game-1',
-    title: 'browser-game-1',
+    slug: 'grapnl',
+    title: 'grapnl',
     description: '日替わりのコースを走り、同じコースを走った人と自己ベストを競う。',
     maxScorePerSecond: 500,
   },

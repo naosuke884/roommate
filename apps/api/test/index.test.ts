@@ -19,7 +19,7 @@ describe('GET /games', () => {
     const res = await get('games');
     expect(res.status).toBe(200);
     const body = await res.json<{ games: { slug: string }[] }>();
-    expect(body.games.map((game) => game.slug)).toContain('browser-game-1');
+    expect(body.games.map((game) => game.slug)).toContain('grapnl');
   });
 });
 

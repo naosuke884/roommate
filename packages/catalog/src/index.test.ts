@@ -22,7 +22,7 @@ describe('games', () => {
 
 describe('playUrl', () => {
   it('配信 URL が /<slug>/ になる', () => {
-    expect(playUrl('browser-game-1')).toBe(`${playOrigin}/browser-game-1/`);
+    expect(playUrl('grapnl')).toBe(`${playOrigin}/grapnl/`);
   });
 
   it('サイトと配信の origin が別である', () => {
@@ -34,7 +34,7 @@ describe('playUrl', () => {
 
 describe('findGame', () => {
   it('slug でゲームを引ける', () => {
-    expect(findGame('browser-game-1')?.slug).toBe('browser-game-1');
+    expect(findGame('grapnl')?.slug).toBe('grapnl');
   });
 
   it('無い slug では undefined を返す', () => {

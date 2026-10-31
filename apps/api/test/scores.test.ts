@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { anonymousName, parseScore } from '../src/scores.ts';
 import { issuePlayer, request, today } from './helpers.ts';
 
-const GAME = 'browser-game-1';
+const GAME = 'grapnl';
 
 function submit(token: string, body: unknown, game = GAME) {
   return request(`/games/${game}/scores`, {

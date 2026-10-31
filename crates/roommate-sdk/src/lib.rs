@@ -4,7 +4,7 @@
 //! `roommate-sdk.js` は `mq_js_bundle.js` の後、`load()` の前に読み込む。
 //!
 //! ```html
-//! <script src="roommate-sdk.js" data-game="browser-game-1"></script>
+//! <script src="roommate-sdk.js" data-game="grapnl"></script>
 //! ```
 //!
 //! ネイティブ実行(開発用)では通信せず、自己ベストは起動している間だけ覚える。
