@@ -224,6 +224,74 @@ describe('Client', () => {
     expect(c.bestScore()).toBe(80);
   });
 
+  it('送れなかったスコアは手元に残し、次に開いたときに送る', async () => {
+    const storage = memoryStorage();
+    const offline = {
+      fetch: (async () => {
+        throw new TypeError('offline');
+      }) as typeof fetch,
+    };
+    const first = new Client({
+      apiOrigin: API,
+      game: 'g',
+      fetch: offline.fetch,
+      storage,
+      now: () => NOW,
+    });
+    await first.submitScore(80, 60_000);
+    expect(JSON.parse(storage.data.get('roommate.pending.g')!)).toEqual([
+      { day: '2026-06-15', score: 80, durationMs: 60_000 },
+    ]);
+
+    const api = fakeApi({
+      'POST /players': () => [201, issued],
+      'GET /games/g/scores/me': () => [200, { best: null }],
+      'POST /games/g/scores': () => [201, { best: 80 }],
+    });
+    const second = client(api, storage);
+    await second.token();
+    await settle();
+    await settle();
+
+    const posts = api.calls.filter((call) => call.path === '/games/g/scores');
+    expect(posts.map((call) => call.body)).toEqual([
+      { day: '2026-06-15', score: 80, durationMs: 60_000 },
+    ]);
+    expect(storage.data.has('roommate.pending.g')).toBe(false);
+  });
+
+  it('サーバーのエラーなら残し、受け付けられないスコアは捨てる', async () => {
+    let status = 503;
+    const api = fakeApi({
+      'POST /players': () => [201, issued],
+      'GET /games/g/scores/me': () => [200, { best: null }],
+      'POST /games/g/scores': () => [status, { error: 'x' }],
+    });
+    const storage = memoryStorage();
+    const c = client(api, storage);
+    await c.token();
+
+    await c.submitScore(10, 60_000);
+    expect(JSON.parse(storage.data.get('roommate.pending.g')!)).toHaveLength(1);
+
+    status = 400;
+    await c.submitScore(20, 60_000);
+    expect(storage.data.has('roommate.pending.g')).toBe(false);
+  });
+
+  it('手元に残すのは新しい 20 件まで', async () => {
+    const storage = memoryStorage();
+    const offline = (async () => {
+      throw new TypeError('offline');
+    }) as typeof fetch;
+    const c = new Client({ apiOrigin: API, game: 'g', fetch: offline, storage, now: () => NOW });
+    for (let score = 1; score <= 25; score++) await c.submitScore(score, 60_000);
+    const pending = JSON.parse(storage.data.get('roommate.pending.g')!) as { score: number }[];
+    expect(pending.map((entry) => entry.score)).toEqual(
+      Array.from({ length: 20 }, (_, i) => i + 6),
+    );
+  });
+
   it('localStorage が例外を投げても止まらない', async () => {
     const throwing = {
       getItem: () => {

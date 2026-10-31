@@ -15,7 +15,15 @@ interface StoredPlayer {
   expiresAt: number;
 }
 
+interface PendingScore {
+  day: string;
+  score: number;
+  durationMs: number;
+}
+
 const PLAYER_KEY = 'roommate.player';
+// 送れずに手元に残すスコアの数。超えたら古いものから捨てる
+const MAX_PENDING = 20;
 // 期限までこれより短くなったら、同じ ID で発行し直す
 const REFRESH_BEFORE_SECONDS = 7 * 24 * 60 * 60;
 // 期限が切れてからも、この間は同じ ID で発行し直せる(API の REFRESH_GRACE_SECONDS と同じ)
@@ -25,12 +33,15 @@ export class Client {
   private player: StoredPlayer | undefined;
   private best: number | undefined;
   private ready: Promise<StoredPlayer | undefined>;
+  private flushing: Promise<void> | undefined;
   private readonly bestKey: string;
+  private readonly pendingKey: string;
   private readonly now: () => Date;
 
   constructor(private readonly options: ClientOptions) {
     this.now = options.now ?? (() => new Date());
     this.bestKey = `roommate.best.${options.game}`;
+    this.pendingKey = `roommate.pending.${options.game}`;
     const local = Number(this.read(this.bestKey));
     this.best = Number.isSafeInteger(local) && local > 0 ? local : undefined;
     this.ready = this.start();
@@ -51,40 +62,95 @@ export class Client {
     return (await this.ready)?.token;
   }
 
-  /** スコアを送る。結果は待たずに戻り、自己ベストは手元ですぐ更新する */
+  /**
+   * スコアを送る。結果は待たずに戻り、自己ベストは手元ですぐ更新する。
+   * 送れなかったスコアは手元に残し、次に送るときや次に開いたときに送り直す
+   */
   submitScore(score: number, durationMs: number): Promise<void> {
     this.raiseBest(score);
-    return this.send(score, durationMs).catch(() => {
+    this.enqueue({ day: courseDay(this.now()), score, durationMs });
+    return this.flush().catch(() => {
       // 送れなくてもゲームは続ける。自己ベストは手元に残っている
     });
   }
 
-  private async send(score: number, durationMs: number) {
+  /** 手元に残っているスコアを古い順に送る。送れなかった分は残す */
+  private async flush() {
+    if (this.flushing) return this.flushing;
+    this.flushing = (async () => {
+      try {
+        const player = await this.ready;
+        if (!player) return;
+        for (;;) {
+          const [next] = this.pending();
+          if (!next) return;
+          if ((await this.deliver(next)) === 'retry') return;
+          this.writePending(this.pending().slice(1));
+        }
+      } finally {
+        this.flushing = undefined;
+      }
+    })();
+    return this.flushing;
+  }
+
+  /** 1 件送る。送れたか、送り直しても受け付けられないものは done */
+  private async deliver(entry: PendingScore): Promise<'done' | 'retry'> {
     let player = await this.ready;
-    if (!player) return;
-    const body = JSON.stringify({ day: courseDay(this.now()), score, durationMs });
-    let res = await this.postScore(player, body);
-    // トークンが通らなくなった(ID が消えた、署名の鍵を替えたなど)ら、ID をもらい直して 1 回だけ送り直す
-    if (res.status === 401) {
-      player = await this.reissue();
-      if (!player) return;
+    if (!player) return 'retry';
+    const body = JSON.stringify(entry);
+    let res: Response;
+    try {
       res = await this.postScore(player, body);
+      // トークンが通らなくなった(ID が消えた、署名の鍵を替えたなど)ら、ID をもらい直して送り直す
+      if (res.status === 401) {
+        player = await this.reissue();
+        if (!player) return 'retry';
+        res = await this.postScore(player, body);
+      }
+    } catch {
+      return 'retry';
     }
     if (res.ok) {
       const { best } = (await res.json()) as { best: number | null };
       if (best !== null) this.raiseBest(best);
+      return 'done';
+    }
+    // 送りすぎとサーバーのエラーは後で送り直す。ほかの 4xx は送り直しても通らない
+    return res.status === 429 || res.status >= 500 ? 'retry' : 'done';
+  }
+
+  private pending(): PendingScore[] {
+    try {
+      const value = JSON.parse(this.read(this.pendingKey) ?? '[]') as unknown;
+      return Array.isArray(value) ? (value as PendingScore[]) : [];
+    } catch {
+      return [];
     }
   }
 
+  private enqueue(entry: PendingScore) {
+    this.writePending([...this.pending(), entry].slice(-MAX_PENDING));
+  }
+
+  private writePending(entries: PendingScore[]) {
+    if (entries.length === 0) this.remove(this.pendingKey);
+    else this.write(this.pendingKey, JSON.stringify(entries));
+  }
+
   private async start(): Promise<StoredPlayer | undefined> {
+    let player: StoredPlayer;
     try {
-      const player = await this.ensurePlayer();
-      this.player = player;
-      await this.loadBest(player);
-      return player;
+      player = await this.ensurePlayer();
     } catch {
       return undefined;
     }
+    this.player = player;
+    // 自己ベストを読めなくても、ID は使える
+    await this.loadBest(player).catch(() => {});
+    // 前に送れなかったスコアを送る。ready が決まってから動くように後に回す
+    setTimeout(() => void this.flush().catch(() => {}), 0);
+    return player;
   }
 
   private async ensurePlayer(): Promise<StoredPlayer> {
@@ -188,6 +254,14 @@ export class Client {
       this.options.storage.setItem(key, value);
     } catch {
       // 保存できなくても続ける
+    }
+  }
+
+  private remove(key: string) {
+    try {
+      this.options.storage.removeItem(key);
+    } catch {
+      // 消せなくても続ける
     }
   }
 }
