@@ -1,0 +1,13 @@
+{
+  "extraKnownMarketplaces": {
+    "naosuke884-plugins": {
+      "source": {
+        "source": "github",
+        "repo": "naosuke884/plugins"
+      }
+    }
+  },
+  "enabledPlugins": {
+    "git@naosuke884-plugins": true
+  }
+}
