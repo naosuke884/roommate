@@ -1,8 +1,7 @@
-import { siteOrigin } from '@roommate/catalog';
 import { cacheControl, contentSecurityPolicy, contentType, resolvePath } from './serve.ts';
 
-// 埋め込みを許すのはブランドサイトだけ。itch.io は入れない。
-const FRAME_ANCESTORS = [siteOrigin];
+// どこにも埋め込ませない。ゲームは配信用ドメインを直接開いて遊ぶ
+const FRAME_ANCESTORS: readonly string[] = [];
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {

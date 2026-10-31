@@ -1,4 +1,4 @@
-/** ブランドサイトの origin。ゲームの埋め込みを許すのはここだけ */
+/** ブランドサイトの origin */
 export const siteOrigin = 'https://roommate.hayashi-naoki.com';
 
 /** ゲーム配信の origin。サイトと origin を分け、ゲームからサイトの中身に触れられないようにする */

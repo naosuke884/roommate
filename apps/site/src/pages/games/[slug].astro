@@ -19,18 +19,10 @@ const { game } = Astro.props;
   <h1>{game.title}</h1>
   <p class="description">{game.description}</p>
 
-  <!--
-    ゲームは配信用の別 origin から読む。allow-same-origin はゲーム自身の origin の
-    localStorage と API の CORS に要る。サイトとは origin が違うので、サイトの中身には触れない
-  -->
-  <iframe
-    class="game"
-    src={playUrl(game.slug)}
-    title={game.title}
-    sandbox="allow-scripts allow-same-origin"
-    allow="fullscreen"
-    loading="eager"
-  ></iframe>
+  <!-- ゲームは配信用ドメインを直接開いて遊ぶ。戻るボタンでこのページへ戻れるよう、同じタブで移る -->
+  <a class="play" href={playUrl(game.slug)}>
+    遊ぶ
+  </a>
 
   <section>
     <h2>今日のランキング</h2>
@@ -39,12 +31,23 @@ const { game } = Astro.props;
 </Base>
 
 <style>
-  .game {
-    display: block;
-    width: 100%;
-    aspect-ratio: 16 / 9;
-    border: 0;
-    background: #000;
+  .play {
+    display: inline-block;
+    padding: 0.75rem 2rem;
+    border-radius: 0.5rem;
+    background: var(--fg);
+    color: var(--bg);
+    font-weight: 700;
+    text-decoration: none;
+  }
+
+  .play:hover {
+    opacity: 0.85;
+  }
+
+  .play:focus-visible {
+    outline: 2px solid var(--fg);
+    outline-offset: 2px;
   }
 
   .description {

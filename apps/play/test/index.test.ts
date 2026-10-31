@@ -1,4 +1,3 @@
-import { siteOrigin } from '@roommate/catalog';
 import { env, exports } from 'cloudflare:workers';
 import { describe, expect, it } from 'vitest';
 import { cacheControl, contentSecurityPolicy, contentType, resolvePath } from '../src/serve.ts';
@@ -65,9 +64,10 @@ describe('キャッシュと Content-Type', () => {
     expect(contentType('README')).toBe('application/octet-stream');
   });
 
-  it('frame-ancestors はブランドサイトだけで、壊れた値は落とす', () => {
-    expect(contentSecurityPolicy([siteOrigin])).toBe(`frame-ancestors ${siteOrigin}`);
-    expect(contentSecurityPolicy([siteOrigin])).not.toContain('itch.io');
+  it('frame-ancestors は通る origin だけを並べ、壊れた値は落とす', () => {
+    expect(contentSecurityPolicy(['https://site.example'])).toBe(
+      'frame-ancestors https://site.example',
+    );
     expect(contentSecurityPolicy(['https://evil.example/path', 'not a url', '*'])).toBe(
       "frame-ancestors 'none'",
     );
@@ -84,7 +84,7 @@ describe('配信', () => {
     expect(await res.text()).toBe(html);
     expect(res.headers.get('Content-Type')).toBe('text/html; charset=utf-8');
     expect(res.headers.get('Cache-Control')).toBe('no-cache');
-    expect(res.headers.get('Content-Security-Policy')).toBe(`frame-ancestors ${siteOrigin}`);
+    expect(res.headers.get('Content-Security-Policy')).toBe("frame-ancestors 'none'");
     expect(res.headers.get('X-Content-Type-Options')).toBe('nosniff');
   });
 
@@ -92,7 +92,7 @@ describe('配信', () => {
     const res = await request('/browser-game-1?v=abc');
     expect(res.status).toBe(308);
     expect(res.headers.get('Location')).toBe(`${ORIGIN}/browser-game-1/?v=abc`);
-    expect(res.headers.get('Content-Security-Policy')).toBe(`frame-ancestors ${siteOrigin}`);
+    expect(res.headers.get('Content-Security-Policy')).toBe("frame-ancestors 'none'");
   });
 
   it('v 付きの wasm は application/wasm で長くキャッシュし、キーには v を使わない', async () => {
@@ -130,7 +130,7 @@ describe('配信', () => {
     for (const path of ['/browser-game-1/missing.js', '/other-game/', '/']) {
       const res = await request(path);
       expect(res.status).toBe(404);
-      expect(res.headers.get('Content-Security-Policy')).toBe(`frame-ancestors ${siteOrigin}`);
+      expect(res.headers.get('Content-Security-Policy')).toBe("frame-ancestors 'none'");
       expect(await res.text()).toBe('Not Found');
     }
   });
@@ -151,7 +151,7 @@ describe('配信', () => {
     const res = await request('/browser-game-1/missing.js', 'HEAD');
     expect(res.status).toBe(404);
     expect(await res.text()).toBe('');
-    expect(res.headers.get('Content-Security-Policy')).toBe(`frame-ancestors ${siteOrigin}`);
+    expect(res.headers.get('Content-Security-Policy')).toBe("frame-ancestors 'none'");
   });
 
   it('GET と HEAD 以外は 405', async () => {
