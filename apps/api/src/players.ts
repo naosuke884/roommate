@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import { issuePlayerToken, requirePlayer } from './auth.ts';
+import { issuePlayerToken, requirePlayer, requireRefreshablePlayer } from './auth.ts';
 
 export const players = new Hono<{ Bindings: Env }>();
 
@@ -18,8 +18,8 @@ players.post('/', async (c) => {
   return c.json(await issuePlayerToken(playerId, c.env.JWT_SECRET), 201);
 });
 
-// 有効なトークンと引き換えに、同じ ID で発行し直す
-players.post('/me/token', requirePlayer, async (c) => {
+// トークンと引き換えに、同じ ID で発行し直す。期限切れでも猶予の間は引き換えられる
+players.post('/me/token', requireRefreshablePlayer, async (c) => {
   const playerId = c.get('playerId');
   const row = await c.env.DB.prepare('SELECT 1 FROM players WHERE id = ?').bind(playerId).first();
   if (!row) {

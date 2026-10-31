@@ -2,7 +2,7 @@ import { siteOrigin } from '@roommate/catalog';
 import { env } from 'cloudflare:workers';
 import { sign } from 'hono/jwt';
 import { describe, expect, it } from 'vitest';
-import { TOKEN_TTL_SECONDS, issuePlayerToken } from '../src/auth.ts';
+import { REFRESH_GRACE_SECONDS, TOKEN_TTL_SECONDS, issuePlayerToken } from '../src/auth.ts';
 import { type TokenBody, issuePlayer as issue, request } from './helpers.ts';
 
 describe('POST /players', () => {
@@ -80,6 +80,32 @@ describe('POST /players/me/token', () => {
     const body = await res.json<TokenBody>();
     expect(body.playerId).toBe(first.playerId);
     expect(body.expiresAt).toBeGreaterThanOrEqual(first.expiresAt);
+  });
+
+  it('期限切れでも猶予の間なら、同じ ID で新しいトークンを返す', async () => {
+    const { playerId } = await issue();
+    const issuedAt = Math.floor(Date.now() / 1000) - TOKEN_TTL_SECONDS - 90 * 86400;
+    const { token } = await issuePlayerToken(playerId, env.JWT_SECRET, issuedAt);
+    const res = await request('/players/me/token', { method: 'POST', token });
+    expect(res.status).toBe(200);
+    const body = await res.json<TokenBody>();
+    expect(body.playerId).toBe(playerId);
+    expect(body.expiresAt).toBeGreaterThan(Date.now() / 1000);
+  });
+
+  it('猶予も過ぎたトークンは受け付けない', async () => {
+    const { playerId } = await issue();
+    const issuedAt = Math.floor(Date.now() / 1000) - TOKEN_TTL_SECONDS - REFRESH_GRACE_SECONDS - 60;
+    const { token } = await issuePlayerToken(playerId, env.JWT_SECRET, issuedAt);
+    const res = await request('/players/me/token', { method: 'POST', token });
+    expect(res.status).toBe(401);
+  });
+
+  it('別の鍵で署名したトークンは、猶予の間でも受け付けない', async () => {
+    const { playerId } = await issue();
+    const { token } = await issuePlayerToken(playerId, 'another-secret');
+    const res = await request('/players/me/token', { method: 'POST', token });
+    expect(res.status).toBe(401);
   });
 
   it('保存されていない ID のトークンは受け付けない', async () => {
