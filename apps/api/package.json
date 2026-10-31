@@ -6,7 +6,7 @@
     "dev": "wrangler dev",
     "typecheck": "wrangler types && tsc",
     "test": "vitest run",
-    "deploy": "wrangler deploy"
+    "deploy": "./scripts/deploy.sh"
   },
   "dependencies": {
     "@roommate/catalog": "workspace:*",
