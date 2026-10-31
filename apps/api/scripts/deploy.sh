@@ -15,3 +15,6 @@ secrets_file=$(mktemp)
 trap 'rm -f "$secrets_file"' EXIT
 node -e 'process.stdout.write(JSON.stringify({ JWT_SECRET: process.env.JWT_SECRET }))' >"$secrets_file"
 wrangler deploy --secrets-file "$secrets_file"
+
+# Worker の手前で、IP ごとに極端な連打を弾く
+node scripts/waf-rate-limit.mjs
