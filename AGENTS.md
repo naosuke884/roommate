@@ -9,6 +9,8 @@
 - `apps/site`: ブランドサイト。Astro で静的に出力し、Workers の静的アセットとして配信する
 - `apps/api`: API。Hono を Workers で動かす
 - `apps/play`: ゲームの配信。R2 バケット `roommate-games` の `<slug>/<file>` を、配信用 Worker から `/<slug>/` で配信する
+- `packages/brand-sdk`: ゲームが読み込む `brand-sdk.js`。macroquad の JS ローダーのプラグイン
+- `crates/brand-sdk`: `brand-sdk.js` の関数を包む Rust の crate
 - `packages/catalog`: ゲームのカタログ。サイトと配信の origin もここにある。ゲームのソースはこの repo に入れない
 
 ## ゲームの配信
@@ -18,6 +20,14 @@
 - `?v=` はキャッシュを分けるためだけで、R2 のキーには使わない。参照への付与はゲームの CI が行う（macroquad のローダーはファイル名が固定のため）
 - 応答の CSP `frame-ancestors` はブランドサイトだけ。itch.io は入れない
 - ゲームの CI が使うアップロード用トークンは、バケット `roommate-games` だけに書き込める権限にする。デプロイ用トークンとは分ける
+
+## brand-sdk
+
+- ゲームは同じタグの crate と `brand-sdk.js` を使う
+  - crate: `brand-sdk = { git = "https://github.com/naosuke884/roommate", tag = "brand-sdk-v<version>" }`
+  - JS: そのタグの `packages/brand-sdk/dist/brand-sdk.js` をゲームの `web/` に置き、`<script src="brand-sdk.js" data-game="<slug>"></script>` で読む
+- `dist/brand-sdk.js` はビルドしたものを commit する。CI がビルドと同じかを確かめる
+- 出すときは `crates/brand-sdk/Cargo.toml` の version を上げて main に入れ、`brand-sdk-v<version>` のタグを push する
 
 ## 開発
 
