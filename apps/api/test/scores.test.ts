@@ -107,6 +107,28 @@ describe('GET /games/:slug/rankings/:day', () => {
     });
   });
 
+  it('同点なら、その点を先に出した人を上にする', async () => {
+    const day = '2026-01-20';
+    const a = await issuePlayer();
+    const b = await issuePlayer();
+    const insert = env.DB.prepare(
+      'INSERT INTO scores (game, day, player_id, score, duration_ms, created_at) VALUES (?, ?, ?, ?, ?, ?)',
+    );
+    // a はその日に先に送り始めたが、500 点を出したのは b より後
+    await env.DB.batch([
+      insert.bind(GAME, day, a.playerId, 100, 60_000, 1),
+      insert.bind(GAME, day, b.playerId, 500, 60_000, 2),
+      insert.bind(GAME, day, a.playerId, 500, 60_000, 3),
+    ]);
+
+    const res = await request(`/games/${GAME}/rankings/${day}`);
+    const { entries } = await res.json<{ entries: { name: string }[] }>();
+    expect(entries.map((entry) => entry.name)).toEqual([
+      anonymousName(b.playerId),
+      anonymousName(a.playerId),
+    ]);
+  });
+
   it('日付の形が違えば 400 を返す', async () => {
     const res = await request(`/games/${GAME}/rankings/yesterday`);
     expect(res.status).toBe(400);

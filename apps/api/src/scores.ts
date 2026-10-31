@@ -59,10 +59,16 @@ scores.get('/games/:slug/rankings/:day', async (c) => {
     return c.json({ error: 'invalid_day' }, 400);
   }
   const { results } = await c.env.DB.prepare(
-    `SELECT player_id, MAX(score) AS score FROM scores
-     WHERE game = ? AND day = ? AND hidden_at IS NULL
-     GROUP BY player_id
-     ORDER BY score DESC, MIN(created_at) ASC
+    // 同点なら、その点を先に出した人を上にする
+    `WITH best AS (
+       SELECT player_id, score, created_at,
+         ROW_NUMBER() OVER (PARTITION BY player_id ORDER BY score DESC, created_at ASC) AS nth
+       FROM scores
+       WHERE game = ? AND day = ? AND hidden_at IS NULL
+     )
+     SELECT player_id, score FROM best
+     WHERE nth = 1
+     ORDER BY score DESC, created_at ASC
      LIMIT ?`,
   )
     .bind(c.get('game').slug, day, RANKING_SIZE)
