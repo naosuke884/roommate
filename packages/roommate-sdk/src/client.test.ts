@@ -125,14 +125,43 @@ describe('Client', () => {
     expect(JSON.parse(storage.data.get('roommate.player')!)).toEqual(stored);
   });
 
-  it('期限切れの ID は使わない', async () => {
+  it('期限切れでも猶予の間なら、同じ ID で発行し直す', async () => {
+    const stored = { playerId: 'p0', token: 'old', expiresAt: nowSeconds - 90 * 86400 };
+    const api = fakeApi({
+      'POST /players/me/token': () => [
+        200,
+        { ...stored, token: 'refreshed', expiresAt: nowSeconds + 30 * 86400 },
+      ],
+      'POST /players': () => [201, issued],
+      'GET /games/g/scores/me': () => [200, { best: null }],
+    });
+    const c = client(api, memoryStorage({ 'roommate.player': JSON.stringify(stored) }));
+    expect(await c.token()).toBe('refreshed');
+    expect(api.calls.some((call) => call.path === '/players')).toBe(false);
+  });
+
+  it('期限切れで発行し直せなければ、新しい ID をもらわずに次を待つ', async () => {
     const stored = { playerId: 'p0', token: 'old', expiresAt: nowSeconds - 1 };
+    const api = fakeApi({
+      'POST /players/me/token': () => [503, { error: 'unavailable' }],
+      'POST /players': () => [201, issued],
+    });
+    const storage = memoryStorage({ 'roommate.player': JSON.stringify(stored) });
+    const c = client(api, storage);
+    expect(await c.token()).toBeUndefined();
+    expect(api.calls.some((call) => call.path === '/players')).toBe(false);
+    expect(JSON.parse(storage.data.get('roommate.player')!)).toEqual(stored);
+  });
+
+  it('猶予も過ぎた ID は使わない', async () => {
+    const stored = { playerId: 'p0', token: 'old', expiresAt: nowSeconds - 400 * 86400 };
     const api = fakeApi({
       'POST /players': () => [201, issued],
       'GET /games/g/scores/me': () => [200, { best: null }],
     });
     const c = client(api, memoryStorage({ 'roommate.player': JSON.stringify(stored) }));
     expect(await c.token()).toBe('new-token');
+    expect(api.calls.map((call) => call.path)).not.toContain('/players/me/token');
   });
 
   it('スコアはコースの日付と一緒に送り、自己ベストは送る前に手元で上げる', async () => {

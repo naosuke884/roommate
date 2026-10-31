@@ -18,6 +18,8 @@ interface StoredPlayer {
 const PLAYER_KEY = 'roommate.player';
 // 期限までこれより短くなったら、同じ ID で発行し直す
 const REFRESH_BEFORE_SECONDS = 7 * 24 * 60 * 60;
+// 期限が切れてからも、この間は同じ ID で発行し直せる(API の REFRESH_GRACE_SECONDS と同じ)
+const REFRESH_GRACE_SECONDS = 365 * 24 * 60 * 60;
 
 export class Client {
   private player: StoredPlayer | undefined;
@@ -88,13 +90,18 @@ export class Client {
   private async ensurePlayer(): Promise<StoredPlayer> {
     const stored = this.storedPlayer();
     const nowSeconds = Math.floor(this.now().getTime() / 1000);
-    if (stored && stored.expiresAt > nowSeconds) {
-      if (stored.expiresAt - nowSeconds > REFRESH_BEFORE_SECONDS) return stored;
+    const remaining = stored ? stored.expiresAt - nowSeconds : -Infinity;
+    if (stored && remaining > -REFRESH_GRACE_SECONDS) {
+      if (remaining > REFRESH_BEFORE_SECONDS) return stored;
       const res = await this.request('/players/me/token', stored.token);
       if (res?.ok) return this.savePlayer((await res.json()) as StoredPlayer);
       // 401 は ID が使えないということなので、新しくもらう。
-      // 通信の失敗やサーバーの一時的なエラーなら、まだ有効な今の ID を使い続ける
-      if (res?.status !== 401) return stored;
+      // 通信の失敗やサーバーの一時的なエラーなら、今の ID を捨てない。
+      // 期限内ならそのまま使い、期限切れなら次に開いたときにまた発行し直す
+      if (res?.status !== 401) {
+        if (remaining > 0) return stored;
+        throw new Error('匿名 ID を発行し直せなかった');
+      }
     }
     return this.issue();
   }
