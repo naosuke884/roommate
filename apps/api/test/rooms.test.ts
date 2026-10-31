@@ -60,6 +60,14 @@ async function connect(key: string, token?: string): Promise<Peer> {
 
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
+/** CI では遅れることがあるので、条件がそろうまで待つ */
+async function waitFor(check: () => boolean, timeoutMs = 2_000) {
+  const deadline = Date.now() + timeoutMs;
+  while (!check() && Date.now() < deadline) {
+    await wait(20);
+  }
+}
+
 describe('GET /rooms/:key', () => {
   it('同じ部屋の他の人にだけ、送信者 ID を付けて配る', async () => {
     const a = await connect('relay');
@@ -69,7 +77,7 @@ describe('GET /rooms/:key', () => {
 
     a.ws.send(new Uint8Array([1, 2, 3]));
     b.ws.send(new Uint8Array([9]));
-    await wait(250);
+    await waitFor(() => a.frames.length > 0 && b.frames.length > 0 && c.frames.length >= 2);
 
     expect(a.frames).toEqual([{ from: b.id, data: [9] }]);
     expect(b.frames).toEqual([{ from: a.id, data: [1, 2, 3] }]);
@@ -92,7 +100,7 @@ describe('GET /rooms/:key', () => {
     a.ws.send(new Uint8Array([1]));
     a.ws.send(new Uint8Array([2]));
     a.ws.send(new Uint8Array([3]));
-    await wait(250);
+    await waitFor(() => b.frames.length >= 3);
 
     expect(messages).toBe(1);
     expect(b.frames.map((frame) => frame.data[0])).toEqual([1, 2, 3]);
@@ -104,14 +112,14 @@ describe('GET /rooms/:key', () => {
     expect(a.texts).toContainEqual({ type: 'join', id: b.id });
 
     b.ws.close(1000, 'bye');
-    await wait(100);
+    await waitFor(() => a.texts.length >= 2);
     expect(a.texts).toContainEqual({ type: 'leave', id: b.id });
   });
 
   it('大きすぎるメッセージを送った接続は閉じる', async () => {
     const a = await connect('large');
     a.ws.send(new Uint8Array(MAX_MESSAGE_BYTES + 1));
-    await wait(100);
+    await waitFor(() => a.closed !== undefined);
     expect(a.closed).toBe(1009);
   });
 
@@ -120,7 +128,7 @@ describe('GET /rooms/:key', () => {
     for (let i = 0; i <= MAX_MESSAGES_PER_SECOND; i++) {
       a.ws.send(new Uint8Array([i]));
     }
-    await wait(100);
+    await waitFor(() => a.closed !== undefined);
     expect(a.closed).toBe(1008);
   });
 
