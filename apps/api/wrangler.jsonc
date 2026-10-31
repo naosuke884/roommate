@@ -3,4 +3,26 @@
   "name": "roommate-api",
   "main": "src/index.ts",
   "compatibility_date": "2026-10-23",
+  "vars": {
+    // 匿名 ID の API を呼べるページの origin。カンマ区切り
+    "ALLOWED_ORIGINS": "https://roommate-site.884naoki-dev.workers.dev",
+  },
+  "secrets": {
+    "required": ["JWT_SECRET"],
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      // database_id は書かない。wrangler がこの名前で既存の DB に繋ぐか、無ければ作る
+      "database_name": "roommate",
+      "migrations_dir": "migrations",
+    },
+  ],
+  "ratelimits": [
+    {
+      "name": "PLAYER_ISSUE_LIMITER",
+      "namespace_id": "1001",
+      "simple": { "limit": 10, "period": 60 },
+    },
+  ],
 }
