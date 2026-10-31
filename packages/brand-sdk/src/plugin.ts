@@ -15,7 +15,7 @@ declare global {
   }
 }
 
-const DEFAULT_API_ORIGIN = 'https://roommate-api.884naoki-dev.workers.dev';
+const DEFAULT_API_ORIGIN = 'https://api.roommate.hayashi-naoki.com';
 
 const script = document.currentScript as HTMLScriptElement | null;
 const game = script?.dataset.game;
