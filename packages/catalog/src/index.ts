@@ -12,6 +12,8 @@ export interface Game {
   slug: string;
   title: string;
   description: string;
+  /** 1 秒あたりに伸ばせるスコアの上限。これを超える速さのスコアは受け付けない */
+  maxScorePerSecond: number;
 }
 
 export const games: readonly Game[] = [
@@ -19,6 +21,7 @@ export const games: readonly Game[] = [
     slug: 'browser-game-1',
     title: 'browser-game-1',
     description: '日替わりのコースを走り、同じコースを走った人と自己ベストを競う。',
+    maxScorePerSecond: 50,
   },
 ];
 

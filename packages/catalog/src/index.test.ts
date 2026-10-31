@@ -12,6 +12,12 @@ describe('games', () => {
       expect(game.slug).toMatch(/^[a-z0-9]+(-[a-z0-9]+)*$/);
     }
   });
+
+  it('スコアの上限が正の数になっている', () => {
+    for (const game of games) {
+      expect(game.maxScorePerSecond).toBeGreaterThan(0);
+    }
+  });
 });
 
 describe('playUrl', () => {
