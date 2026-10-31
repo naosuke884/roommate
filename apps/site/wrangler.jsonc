@@ -2,7 +2,7 @@
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "roommate-site",
   "compatibility_date": "2026-10-23",
-  "workers_dev": true,
+  "workers_dev": false,
   "routes": [{ "pattern": "roommate.hayashi-naoki.com", "custom_domain": true }],
   "assets": {
     "directory": "./dist",

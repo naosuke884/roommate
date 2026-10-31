@@ -3,12 +3,12 @@
   "name": "roommate-api",
   "main": "src/index.ts",
   "compatibility_date": "2026-10-23",
-  "workers_dev": true,
+  "workers_dev": false,
   "routes": [{ "pattern": "api.roommate.hayashi-naoki.com", "custom_domain": true }],
   "vars": {
     // 追加で API を呼べる origin。カンマ区切り。
     // サイトと配信用 origin は packages/catalog の siteOrigin / playOrigin を常に許す
-    "ALLOWED_ORIGINS": "https://roommate-site.884naoki-dev.workers.dev",
+    "ALLOWED_ORIGINS": "",
   },
   "secrets": {
     "required": ["JWT_SECRET"],

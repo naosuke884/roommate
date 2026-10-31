@@ -1,11 +1,8 @@
 /** ブランドサイトの origin。ゲームの埋め込みを許すのはここだけ */
-export const siteOrigin = 'https://roommate-site.884naoki-dev.workers.dev';
+export const siteOrigin = 'https://roommate.hayashi-naoki.com';
 
-/**
- * ゲーム配信の origin。カスタムドメインが決まるまでは workers.dev。
- * Worker 名 `roommate-play` と揃える。
- */
-export const playOrigin = 'https://roommate-play.884naoki-dev.workers.dev';
+/** ゲーム配信の origin。サイトと origin を分け、ゲームからサイトの中身に触れられないようにする */
+export const playOrigin = 'https://play.roommate.hayashi-naoki.com';
 
 export interface Game {
   /** URL とゲームの配信パス(`/<slug>/`)に使う */

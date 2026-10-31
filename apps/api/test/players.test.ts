@@ -1,3 +1,4 @@
+import { siteOrigin } from '@roommate/catalog';
 import { env } from 'cloudflare:workers';
 import { sign } from 'hono/jwt';
 import { describe, expect, it } from 'vitest';
@@ -90,7 +91,7 @@ describe('POST /players/me/token', () => {
 
 describe('CORS', () => {
   it('許可した origin には Access-Control-Allow-Origin を返す', async () => {
-    const origin = env.ALLOWED_ORIGINS.split(',')[0]!;
+    const origin = siteOrigin;
     const res = await request('/players', {
       method: 'OPTIONS',
       headers: { Origin: origin, 'Access-Control-Request-Method': 'POST' },
