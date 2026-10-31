@@ -15,7 +15,7 @@ interface Props {
 const { game } = Astro.props;
 ---
 
-<Base title={game.title}>
+<Base title={game.title} description={game.description}>
   <h1>{game.title}</h1>
   <p class="description">{game.description}</p>
 

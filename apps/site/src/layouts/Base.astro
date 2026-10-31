@@ -1,10 +1,17 @@
 ---
 interface Props {
   title?: string;
+  /** 検索結果やリンクの共有で出る説明。省くとサイト全体の説明 */
+  description?: string;
+  /** 検索に載せないページ。canonical と og:url も付けない */
+  noindex?: boolean;
 }
 
-const { title } = Astro.props;
+const SITE_DESCRIPTION = '同じ日に同じコースを遊ぶ人と、スコアを競うブラウザゲーム。';
+
+const { title, description = SITE_DESCRIPTION, noindex = false } = Astro.props;
 const pageTitle = title ? `${title} | roommate` : 'roommate';
+const canonical = new URL(Astro.url.pathname, Astro.site);
 ---
 
 <!doctype html>
@@ -13,6 +20,15 @@ const pageTitle = title ? `${title} | roommate` : 'roommate';
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>{pageTitle}</title>
+    <meta name="description" content={description} />
+    {noindex ? <meta name="robots" content="noindex" /> : <link rel="canonical" href={canonical} />}
+    <meta property="og:site_name" content="roommate" />
+    <meta property="og:title" content={title ?? 'roommate'} />
+    <meta property="og:description" content={description} />
+    {!noindex && <meta property="og:url" content={canonical} />}
+    <meta property="og:type" content="website" />
+    <meta property="og:locale" content="ja_JP" />
+    <meta name="twitter:card" content="summary" />
   </head>
   <body>
     <header>
