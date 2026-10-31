@@ -9,8 +9,8 @@
 - `apps/site`: ブランドサイト。Astro で静的に出力し、Workers の静的アセットとして配信する
 - `apps/api`: API。Hono を Workers で動かす
 - `apps/play`: ゲームの配信。R2 バケット `roommate-games` の `<slug>/<file>` を、配信用 Worker から `/<slug>/` で配信する
-- `packages/brand-sdk`: ゲームが読み込む `brand-sdk.js`。macroquad の JS ローダーのプラグイン
-- `crates/brand-sdk`: `brand-sdk.js` の関数を包む Rust の crate
+- `packages/roommate-sdk`: ゲームが読み込む `roommate-sdk.js`。macroquad の JS ローダーのプラグイン
+- `crates/roommate-sdk`: `roommate-sdk.js` の関数を包む Rust の crate
 - `packages/catalog`: ゲームのカタログ。サイトと配信の origin もここにある。ゲームのソースはこの repo に入れない
 
 ## ゲームの配信
@@ -21,13 +21,13 @@
 - 応答の CSP `frame-ancestors` はブランドサイトだけ。itch.io は入れない
 - ゲームの CI が使うアップロード用トークンは、バケット `roommate-games` だけに書き込める権限にする。デプロイ用トークンとは分ける
 
-## brand-sdk
+## roommate-sdk
 
-- ゲームは同じタグの crate と `brand-sdk.js` を使う
-  - crate: `brand-sdk = { git = "https://github.com/naosuke884/roommate", tag = "brand-sdk-v<version>" }`
-  - JS: そのタグの `packages/brand-sdk/dist/brand-sdk.js` をゲームの `web/` に置き、`<script src="brand-sdk.js" data-game="<slug>"></script>` で読む
-- `dist/brand-sdk.js` はビルドしたものを commit する。CI がビルドと同じかを確かめる
-- 出すときは `crates/brand-sdk/Cargo.toml` の version を上げて main に入れ、`brand-sdk-v<version>` のタグを push する
+- ゲームは同じタグの crate と `roommate-sdk.js` を使う
+  - crate: `roommate-sdk = { git = "https://github.com/naosuke884/roommate", tag = "roommate-sdk-v<version>" }`
+  - JS: そのタグの `packages/roommate-sdk/dist/roommate-sdk.js` をゲームの `web/` に置き、`<script src="roommate-sdk.js" data-game="<slug>"></script>` で読む
+- `dist/roommate-sdk.js` はビルドしたものを commit する。CI がビルドと同じかを確かめる
+- 出すときは `crates/roommate-sdk/Cargo.toml` の version を上げて main に入れ、`roommate-sdk-v<version>` のタグを push する
 
 ## 開発
 

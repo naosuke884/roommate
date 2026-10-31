@@ -1,10 +1,10 @@
 //! roommate のゲームから、匿名 ID・スコア・自己ベストを使う。
 //!
-//! ブラウザでは `brand-sdk.js` が macroquad の JS ローダーのプラグインとして用意する関数を呼ぶ。
-//! `brand-sdk.js` は `mq_js_bundle.js` の後、`load()` の前に読み込む。
+//! ブラウザでは `roommate-sdk.js` が macroquad の JS ローダーのプラグインとして用意する関数を呼ぶ。
+//! `roommate-sdk.js` は `mq_js_bundle.js` の後、`load()` の前に読み込む。
 //!
 //! ```html
-//! <script src="brand-sdk.js" data-game="browser-game-1"></script>
+//! <script src="roommate-sdk.js" data-game="browser-game-1"></script>
 //! ```
 //!
 //! ネイティブ実行(開発用)では通信せず、自己ベストは起動している間だけ覚える。

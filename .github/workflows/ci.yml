@@ -36,15 +36,15 @@ jobs:
       - run: pnpm format:check
       - run: pnpm lint
       - run: pnpm turbo run build typecheck test
-      # ゲームはタグの brand-sdk.js をそのまま取り込むので、commit したものがビルドと同じか確かめる
-      - name: brand-sdk.js が最新か
-        run: git diff --exit-code packages/brand-sdk/dist
+      # ゲームはタグの roommate-sdk.js をそのまま取り込むので、commit したものがビルドと同じか確かめる
+      - name: roommate-sdk.js が最新か
+        run: git diff --exit-code packages/roommate-sdk/dist
 
-  brand-sdk-rust:
+  roommate-sdk-rust:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: crates/brand-sdk
+        working-directory: crates/roommate-sdk
     steps:
       - uses: actions/checkout@v7
       - run: rustup target add wasm32-unknown-unknown && rustup component add rustfmt clippy
@@ -55,7 +55,7 @@ jobs:
       - run: cargo build --target wasm32-unknown-unknown --release
 
   deploy:
-    needs: [check, brand-sdk-rust]
+    needs: [check, roommate-sdk-rust]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     environment: production

@@ -1,9 +1,9 @@
 {
-  "name": "@roommate/brand-sdk",
+  "name": "@roommate/roommate-sdk",
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "esbuild src/plugin.ts --bundle --format=iife --target=es2020 --minify --legal-comments=none --outfile=dist/brand-sdk.js",
+    "build": "esbuild src/plugin.ts --bundle --format=iife --target=es2020 --minify --legal-comments=none --outfile=dist/roommate-sdk.js",
     "typecheck": "tsc",
     "test": "vitest run"
   },

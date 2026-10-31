@@ -8,5 +8,5 @@ dist/
 target/
 worker-configuration.d.ts
 
-# ゲームはタグの brand-sdk.js をそのまま取り込むので、ビルドしたものも commit する
-!packages/brand-sdk/dist/
+# ゲームはタグの roommate-sdk.js をそのまま取り込むので、ビルドしたものも commit する
+!packages/roommate-sdk/dist/

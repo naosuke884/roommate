@@ -3,5 +3,5 @@
 version = 4
 
 [[package]]
-name = "brand-sdk"
+name = "roommate-sdk"
 version = "0.1.0"
