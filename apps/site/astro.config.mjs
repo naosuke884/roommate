@@ -1,3 +1,4 @@
+import process from 'node:process';
 import react from '@astrojs/react';
 import { siteOrigin } from '@roommate/catalog';
 import { defineConfig } from 'astro/config';
