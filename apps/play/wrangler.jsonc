@@ -3,6 +3,8 @@
   "name": "roommate-play",
   "main": "src/index.ts",
   "compatibility_date": "2026-10-23",
+  "workers_dev": true,
+  "routes": [{ "pattern": "play.roommate.hayashi-naoki.com", "custom_domain": true }],
   // ホスト名は roommate-play.<account>.workers.dev。packages/catalog の playOrigin と揃える。
   // カスタムドメインは HAY-103 で決まるまで付けない。
   "r2_buckets": [
