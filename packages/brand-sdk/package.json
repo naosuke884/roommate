@@ -1,0 +1,15 @@
+{
+  "name": "@roommate/brand-sdk",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "esbuild src/plugin.ts --bundle --format=iife --target=es2020 --minify --legal-comments=none --outfile=dist/brand-sdk.js",
+    "typecheck": "tsc",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.2",
+    "typescript": "~6.0.3",
+    "vitest": "^4.1.12"
+  }
+}

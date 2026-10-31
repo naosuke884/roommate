@@ -6,3 +6,6 @@ dist/
 .dev.vars
 .pnpm-store/
 worker-configuration.d.ts
+
+# ゲームはタグの brand-sdk.js をそのまま取り込むので、ビルドしたものも commit する
+!packages/brand-sdk/dist/
