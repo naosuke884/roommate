@@ -90,7 +90,7 @@ describe('Client', () => {
     expect(await c.token()).toBe('refreshed');
   });
 
-  it('発行し直せなければ、新しい ID をもらう', async () => {
+  it('ID が使えないと言われたら、新しい ID をもらう', async () => {
     const stored = { playerId: 'p0', token: 'old', expiresAt: nowSeconds + 86400 };
     const api = fakeApi({
       'POST /players/me/token': () => [401, { error: 'unauthorized' }],
@@ -99,6 +99,30 @@ describe('Client', () => {
     });
     const c = client(api, memoryStorage({ 'roommate.player': JSON.stringify(stored) }));
     expect(await c.token()).toBe('new-token');
+  });
+
+  it.each([
+    ['サーバーのエラー', () => [503, { error: 'unavailable' }] as [number, unknown]],
+    ['送りすぎ', () => [429, { error: 'too_many_requests' }] as [number, unknown]],
+    [
+      '通信の失敗',
+      () => {
+        throw new TypeError('offline');
+      },
+    ],
+  ])('%sで発行し直せなくても、期限内なら今の ID を使い続ける', async (_, refresh) => {
+    const stored = { playerId: 'p0', token: 'old', expiresAt: nowSeconds + 86400 };
+    const api = fakeApi({
+      'POST /players/me/token': refresh,
+      'POST /players': () => [201, issued],
+      'GET /games/g/scores/me': () => [200, { best: null }],
+    });
+    const storage = memoryStorage({ 'roommate.player': JSON.stringify(stored) });
+    const c = client(api, storage);
+
+    expect(await c.token()).toBe('old');
+    expect(api.calls.some((call) => call.path === '/players')).toBe(false);
+    expect(JSON.parse(storage.data.get('roommate.player')!)).toEqual(stored);
   });
 
   it('期限切れの ID は使わない', async () => {
@@ -129,6 +153,26 @@ describe('Client', () => {
     expect(post.body).toEqual({ day: '2026-06-15', score: 300, durationMs: 60_000 });
     expect(post.auth).toBe('Bearer new-token');
     expect(storage.data.get('roommate.best.g')).toBe('300');
+  });
+
+  it('スコアの送信でトークンが通らなければ、ID をもらい直して送り直す', async () => {
+    const stored = { playerId: 'p0', token: 'old', expiresAt: nowSeconds + 20 * 86400 };
+    const api = fakeApi({
+      'GET /games/g/scores/me': () => [200, { best: null }],
+      'POST /players': () => [201, issued],
+      'POST /games/g/scores': (call) =>
+        call.auth === 'Bearer old' ? [401, { error: 'unauthorized' }] : [201, { best: 300 }],
+    });
+    const storage = memoryStorage({ 'roommate.player': JSON.stringify(stored) });
+    const c = client(api, storage);
+    await c.token();
+
+    await c.submitScore(300, 60_000);
+
+    const posts = api.calls.filter((call) => call.path === '/games/g/scores');
+    expect(posts.map((call) => call.auth)).toEqual(['Bearer old', 'Bearer new-token']);
+    expect(await c.token()).toBe('new-token');
+    expect(JSON.parse(storage.data.get('roommate.player')!)).toEqual(issued);
   });
 
   it('API に繋がらなくても、手元の自己ベストで続けられる', async () => {

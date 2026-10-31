@@ -58,13 +58,16 @@ export class Client {
   }
 
   private async send(score: number, durationMs: number) {
-    const player = await this.ready;
+    let player = await this.ready;
     if (!player) return;
-    const res = await this.options.fetch(`${this.gamePath()}/scores`, {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${player.token}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ day: courseDay(this.now()), score, durationMs }),
-    });
+    const body = JSON.stringify({ day: courseDay(this.now()), score, durationMs });
+    let res = await this.postScore(player, body);
+    // トークンが通らなくなった(ID が消えた、署名の鍵を替えたなど)ら、ID をもらい直して 1 回だけ送り直す
+    if (res.status === 401) {
+      player = await this.reissue();
+      if (!player) return;
+      res = await this.postScore(player, body);
+    }
     if (res.ok) {
       const { best } = (await res.json()) as { best: number | null };
       if (best !== null) this.raiseBest(best);
@@ -87,12 +90,36 @@ export class Client {
     const nowSeconds = Math.floor(this.now().getTime() / 1000);
     if (stored && stored.expiresAt > nowSeconds) {
       if (stored.expiresAt - nowSeconds > REFRESH_BEFORE_SECONDS) return stored;
-      const refreshed = await this.post('/players/me/token', stored.token);
-      if (refreshed) return this.savePlayer(refreshed);
+      const res = await this.request('/players/me/token', stored.token);
+      if (res?.ok) return this.savePlayer((await res.json()) as StoredPlayer);
+      // 401 は ID が使えないということなので、新しくもらう。
+      // 通信の失敗やサーバーの一時的なエラーなら、まだ有効な今の ID を使い続ける
+      if (res?.status !== 401) return stored;
     }
-    const issued = await this.post('/players');
-    if (!issued) throw new Error('匿名 ID を発行できなかった');
-    return this.savePlayer(issued);
+    return this.issue();
+  }
+
+  private async issue(): Promise<StoredPlayer> {
+    const res = await this.request('/players');
+    if (!res?.ok) throw new Error('匿名 ID を発行できなかった');
+    return this.savePlayer((await res.json()) as StoredPlayer);
+  }
+
+  private async reissue(): Promise<StoredPlayer | undefined> {
+    const player = await this.issue().catch(() => undefined);
+    if (player) {
+      this.player = player;
+      this.ready = Promise.resolve(player);
+    }
+    return player;
+  }
+
+  private postScore(player: StoredPlayer, body: string): Promise<Response> {
+    return this.options.fetch(`${this.gamePath()}/scores`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${player.token}`, 'Content-Type': 'application/json' },
+      body,
+    });
   }
 
   private async loadBest(player: StoredPlayer) {
@@ -104,12 +131,16 @@ export class Client {
     if (best !== null) this.raiseBest(best);
   }
 
-  private async post(path: string, token?: string): Promise<StoredPlayer | undefined> {
-    const res = await this.options.fetch(`${this.options.apiOrigin}${path}`, {
-      method: 'POST',
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
-    });
-    return res.ok ? ((await res.json()) as StoredPlayer) : undefined;
+  /** ID の発行・更新を POST する。通信に失敗したら undefined */
+  private async request(path: string, token?: string): Promise<Response | undefined> {
+    try {
+      return await this.options.fetch(`${this.options.apiOrigin}${path}`, {
+        method: 'POST',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+    } catch {
+      return undefined;
+    }
   }
 
   private raiseBest(score: number) {
