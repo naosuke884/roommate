@@ -1,6 +1,6 @@
 [package]
 name = "roommate-sdk"
-version = "0.2.0"
+version = "0.3.0"
 edition = "2021"
 publish = false
 description = "roommate のゲームから匿名 ID・スコア・自己ベストを使う"
