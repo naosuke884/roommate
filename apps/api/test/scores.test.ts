@@ -33,6 +33,18 @@ describe('POST /games/:slug/scores', () => {
     expect(res.status).toBe(401);
   });
 
+  it('消したプレイヤーのトークンなら、保存せずに 401 を返す', async () => {
+    const { playerId, token } = await issuePlayer();
+    await env.DB.prepare('DELETE FROM players WHERE id = ?').bind(playerId).run();
+
+    const res = await submit(token, { day: today(), score: 1, durationMs: 60_000 });
+    expect(res.status).toBe(401);
+    const row = await env.DB.prepare('SELECT COUNT(*) AS n FROM scores WHERE player_id = ?')
+      .bind(playerId)
+      .first<{ n: number }>();
+    expect(row?.n).toBe(0);
+  });
+
   it('無いゲームには 404 を返す', async () => {
     const { token } = await issuePlayer();
     const res = await submit(token, { day: today(), score: 1, durationMs: 60_000 }, 'missing');

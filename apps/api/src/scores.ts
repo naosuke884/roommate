@@ -35,11 +35,16 @@ scores.post('/games/:slug/scores', requirePlayer, async (c) => {
     return c.json({ error: input }, 400);
   }
 
-  await c.env.DB.prepare(
-    'INSERT INTO scores (game, day, player_id, score, duration_ms, created_at) VALUES (?, ?, ?, ?, ?, ?)',
+  // 運営が消したプレイヤーのトークンは、期限まで署名が通る。保存せずに 401 を返し、ID をもらい直させる
+  const { meta } = await c.env.DB.prepare(
+    `INSERT INTO scores (game, day, player_id, score, duration_ms, created_at)
+     SELECT ?1, ?2, ?3, ?4, ?5, ?6 WHERE EXISTS (SELECT 1 FROM players WHERE id = ?3)`,
   )
     .bind(game.slug, input.day, playerId, input.score, input.durationMs, Date.now())
     .run();
+  if (meta.changes === 0) {
+    return c.json({ error: 'unauthorized' }, 401);
+  }
 
   return c.json({ best: await bestScore(c.env.DB, game.slug, playerId, input.day) }, 201);
 });
