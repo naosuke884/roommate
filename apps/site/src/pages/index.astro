@@ -1,0 +1,39 @@
+---
+import { games } from '@roommate/catalog';
+import Base from '../layouts/Base.astro';
+---
+
+<Base>
+  <h1>ゲーム</h1>
+  <ul class="games">
+    {games.map((game) => (
+      <li>
+        <h2>{game.title}</h2>
+        <p>{game.description}</p>
+      </li>
+    ))}
+  </ul>
+</Base>
+
+<style>
+  .games {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+
+  .games li {
+    border-top: 1px solid var(--line);
+    padding: 1rem 0;
+  }
+
+  .games h2 {
+    margin: 0;
+    font-size: 1.125rem;
+  }
+
+  .games p {
+    margin: 0.25rem 0 0;
+    color: var(--muted);
+  }
+</style>

@@ -1,0 +1,67 @@
+---
+interface Props {
+  title?: string;
+}
+
+const { title } = Astro.props;
+const pageTitle = title ? `${title} | roommate` : 'roommate';
+---
+
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{pageTitle}</title>
+  </head>
+  <body>
+    <header>
+      <a href="/" class="brand">
+        roommate
+      </a>
+    </header>
+    <main>
+      <slot />
+    </main>
+  </body>
+</html>
+
+<style is:global>
+  :root {
+    color-scheme: light dark;
+    --bg: #fafaf7;
+    --fg: #1d1d1b;
+    --muted: #6b6b66;
+    --line: #e2e2dc;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #161614;
+      --fg: #ecece6;
+      --muted: #9a9a93;
+      --line: #2e2e2a;
+    }
+  }
+
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: system-ui, sans-serif;
+    line-height: 1.6;
+  }
+
+  header,
+  main {
+    max-width: 48rem;
+    margin: 0 auto;
+    padding: 1.5rem 1rem;
+  }
+
+  .brand {
+    color: inherit;
+    font-weight: 700;
+    text-decoration: none;
+  }
+</style>
