@@ -8,7 +8,9 @@ import Base from '../layouts/Base.astro';
   <ul class="games">
     {games.map((game) => (
       <li>
-        <h2>{game.title}</h2>
+        <h2>
+          <a href={`/games/${game.slug}/`}>{game.title}</a>
+        </h2>
         <p>{game.description}</p>
       </li>
     ))}

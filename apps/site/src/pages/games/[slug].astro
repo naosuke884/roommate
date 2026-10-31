@@ -1,0 +1,67 @@
+---
+import { games, type Game } from '@roommate/catalog';
+import Ranking from '../../components/Ranking.tsx';
+import { API_ORIGIN } from '../../config.ts';
+import Base from '../../layouts/Base.astro';
+
+export function getStaticPaths() {
+  return games.map((game) => ({ params: { slug: game.slug }, props: { game } }));
+}
+
+interface Props {
+  game: Game;
+}
+
+const { game } = Astro.props;
+---
+
+<Base title={game.title}>
+  <h1>{game.title}</h1>
+  <p class="description">{game.description}</p>
+
+  <section>
+    <h2>今日のランキング</h2>
+    <Ranking client:load apiOrigin={API_ORIGIN} game={game.slug} />
+  </section>
+</Base>
+
+<style>
+  .description {
+    color: var(--muted);
+  }
+
+  section {
+    margin-top: 2rem;
+  }
+
+  h2 {
+    font-size: 1.125rem;
+  }
+
+  :global(.ranking) {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+
+  :global(.ranking li) {
+    display: grid;
+    grid-template-columns: 2.5rem 1fr auto;
+    gap: 0.5rem;
+    border-top: 1px solid var(--line);
+    padding: 0.5rem 0;
+  }
+
+  :global(.ranking-rank) {
+    color: var(--muted);
+    font-variant-numeric: tabular-nums;
+  }
+
+  :global(.ranking-score) {
+    font-variant-numeric: tabular-nums;
+  }
+
+  :global(.ranking-note) {
+    color: var(--muted);
+  }
+</style>
