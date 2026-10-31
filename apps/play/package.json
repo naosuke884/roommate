@@ -1,0 +1,20 @@
+{
+  "name": "@roommate/play",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "typecheck": "wrangler types && tsc",
+    "test": "vitest run",
+    "deploy": "./scripts/deploy.sh"
+  },
+  "dependencies": {
+    "@roommate/catalog": "workspace:*"
+  },
+  "devDependencies": {
+    "@cloudflare/vitest-plugin": "^1.4.11",
+    "typescript": "~6.0.3",
+    "vitest": "^4.1.12",
+    "wrangler": "^4.156.0"
+  }
+}

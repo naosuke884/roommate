@@ -8,7 +8,16 @@
 
 - `apps/site`: ブランドサイト。Astro で静的に出力し、Workers の静的アセットとして配信する
 - `apps/api`: API。Hono を Workers で動かす
-- `packages/catalog`: ゲームのカタログ。ゲームのソースはこの repo に入れない
+- `apps/play`: ゲームの配信。R2 バケット `roommate-games` の `<slug>/<file>` を、配信用 Worker から `/<slug>/` で配信する
+- `packages/catalog`: ゲームのカタログ。サイトと配信の origin もここにある。ゲームのソースはこの repo に入れない
+
+## ゲームの配信
+
+- 新しいビルドは同じキーへ上書きする。バージョンごとのコピーは残さない
+- `index.html` はキャッシュしない。`.wasm` と JS は、URL に空でない `?v=<commit>` が付いているときだけ長くキャッシュする
+- `?v=` はキャッシュを分けるためだけで、R2 のキーには使わない。参照への付与はゲームの CI が行う（macroquad のローダーはファイル名が固定のため）
+- 応答の CSP `frame-ancestors` はブランドサイトだけ。itch.io は入れない
+- ゲームの CI が使うアップロード用トークンは、バケット `roommate-games` だけに書き込める権限にする。デプロイ用トークンとは分ける
 
 ## 開発
 

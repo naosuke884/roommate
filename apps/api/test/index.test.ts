@@ -1,3 +1,4 @@
+import { playOrigin, siteOrigin } from '@roommate/catalog';
 import { exports } from 'cloudflare:workers';
 import { describe, expect, it } from 'vitest';
 
@@ -19,6 +20,22 @@ describe('GET /games', () => {
     expect(res.status).toBe(200);
     const body = await res.json<{ games: { slug: string }[] }>();
     expect(body.games.map((game) => game.slug)).toContain('browser-game-1');
+  });
+});
+
+describe('CORS', () => {
+  it('サイトと配信用 origin は通し、それ以外は通さない', async () => {
+    for (const origin of [siteOrigin, playOrigin]) {
+      const res = await exports.default.fetch(
+        new Request('https://api.example/health', { headers: { Origin: origin } }),
+      );
+      expect(res.headers.get('Access-Control-Allow-Origin')).toBe(origin);
+    }
+
+    const denied = await exports.default.fetch(
+      new Request('https://api.example/health', { headers: { Origin: 'https://itch.io' } }),
+    );
+    expect(denied.headers.get('Access-Control-Allow-Origin')).toBeNull();
   });
 });
 

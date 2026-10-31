@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { findGame, games } from './index.ts';
+import { findGame, games, playOrigin, playUrl, siteOrigin } from './index.ts';
 
 describe('games', () => {
   it('slug が重複しない', () => {
@@ -11,6 +11,18 @@ describe('games', () => {
     for (const game of games) {
       expect(game.slug).toMatch(/^[a-z0-9]+(-[a-z0-9]+)*$/);
     }
+  });
+});
+
+describe('playUrl', () => {
+  it('配信 URL が /<slug>/ になる', () => {
+    expect(playUrl('browser-game-1')).toBe(`${playOrigin}/browser-game-1/`);
+  });
+
+  it('サイトと配信の origin が別である', () => {
+    expect(playOrigin).not.toBe(siteOrigin);
+    expect(playOrigin.startsWith('https://')).toBe(true);
+    expect(siteOrigin.startsWith('https://')).toBe(true);
   });
 });
 

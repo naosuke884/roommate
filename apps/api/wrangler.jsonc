@@ -4,7 +4,8 @@
   "main": "src/index.ts",
   "compatibility_date": "2026-10-23",
   "vars": {
-    // 匿名 ID の API を呼べるページの origin。カンマ区切り
+    // 追加で API を呼べる origin。カンマ区切り。
+    // サイトと配信用 origin は packages/catalog の siteOrigin / playOrigin を常に許す
     "ALLOWED_ORIGINS": "https://roommate-site.884naoki-dev.workers.dev",
   },
   "secrets": {

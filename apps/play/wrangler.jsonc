@@ -1,0 +1,15 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "roommate-play",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-10-23",
+  // ホスト名は roommate-play.<account>.workers.dev。packages/catalog の playOrigin と揃える。
+  // カスタムドメインは HAY-103 で決まるまで付けない。
+  "r2_buckets": [
+    {
+      "binding": "GAMES",
+      // ゲームの CI は `<slug>/<file>` をこのバケットへ上書きする。バージョンは残さない
+      "bucket_name": "roommate-games",
+    },
+  ],
+}
