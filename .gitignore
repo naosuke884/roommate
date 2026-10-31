@@ -7,6 +7,7 @@ dist/
 .pnpm-store/
 target/
 worker-configuration.d.ts
+.playwright-mcp/
 
 # ゲームはタグの roommate-sdk.js をそのまま取り込むので、ビルドしたものも commit する
 !packages/roommate-sdk/dist/
