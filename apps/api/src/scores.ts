@@ -55,7 +55,14 @@ scores.get('/games/:slug/scores/me', requirePlayer, async (c) => {
   if (day !== undefined && !isDay(day)) {
     return c.json({ error: 'invalid_day' }, 400);
   }
-  return c.json({ best: await bestScore(c.env.DB, c.get('game').slug, c.get('playerId'), day) });
+  const game = c.get('game').slug;
+  const playerId = c.get('playerId');
+  const best = await bestScore(c.env.DB, game, playerId, day);
+  if (day === undefined) {
+    return c.json({ best });
+  }
+  // day を指定したときは、ランキングでのその日の順位も返す。50 位より下でも返す
+  return c.json({ best, rank: await rankOf(c.env.DB, game, day, playerId) });
 });
 
 scores.get('/games/:slug/rankings/:day', async (c) => {
@@ -64,17 +71,10 @@ scores.get('/games/:slug/rankings/:day', async (c) => {
     return c.json({ error: 'invalid_day' }, 400);
   }
   const { results } = await c.env.DB.prepare(
-    // 同点なら、その点を先に出した人を上にする
-    `WITH best AS (
-       SELECT player_id, score, created_at,
-         ROW_NUMBER() OVER (PARTITION BY player_id ORDER BY score DESC, created_at ASC) AS nth
-       FROM scores
-       WHERE game = ? AND day = ? AND hidden_at IS NULL
-     )
+    `${DAILY_BEST}
      SELECT player_id, score FROM best
-     WHERE nth = 1
      ORDER BY score DESC, created_at ASC
-     LIMIT ?`,
+     LIMIT ?3`,
   )
     .bind(c.get('game').slug, day, RANKING_SIZE)
     .all<{ player_id: string; score: number }>();
@@ -87,6 +87,33 @@ scores.get('/games/:slug/rankings/:day', async (c) => {
   c.header('Cache-Control', 'public, max-age=30');
   return c.json({ day, entries });
 });
+
+/**
+ * その日のプレイヤーごとの最高点(隠したものを除く)を `best` として持つ。?1 は game、?2 は day。
+ * 同点なら、その点を先に出した人を上にするので、最高点を出した時刻も持つ
+ */
+const DAILY_BEST = `WITH ranked AS (
+  SELECT player_id, score, created_at,
+    ROW_NUMBER() OVER (PARTITION BY player_id ORDER BY score DESC, created_at ASC) AS nth
+  FROM scores
+  WHERE game = ?1 AND day = ?2 AND hidden_at IS NULL
+), best AS (SELECT player_id, score, created_at FROM ranked WHERE nth = 1)`;
+
+/** ランキングでの順位。その日のスコアが無ければ null */
+async function rankOf(db: D1Database, game: string, day: string, playerId: string) {
+  const row = await db
+    .prepare(
+      `${DAILY_BEST}
+       SELECT (
+         SELECT COUNT(*) FROM best AS other
+         WHERE other.score > me.score OR (other.score = me.score AND other.created_at < me.created_at)
+       ) + 1 AS rank
+       FROM best AS me WHERE me.player_id = ?3`,
+    )
+    .bind(game, day, playerId)
+    .first<{ rank: number }>();
+  return row?.rank ?? null;
+}
 
 interface ScoreInput {
   day: string;
