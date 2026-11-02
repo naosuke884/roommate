@@ -1,7 +1,7 @@
 // macroquad の JS ローダーのプラグイン。mq_js_bundle.js の後、load() の前に読み込む。
 //   <script src="roommate-sdk.js" data-game="<slug>"></script>
 // data-api で API の origin を変えられる(開発用)。
-import { Client } from './client.ts';
+import { Client, type ClientStorage } from './client.ts';
 
 declare function miniquad_add_plugin(plugin: {
   register_plugin: (importObject: { env: Record<string, unknown> }) => void;
@@ -27,7 +27,7 @@ if (!game) {
 }
 
 // localStorage に触れるだけで例外になるブラウザでは、開いている間だけ覚える
-let storage: Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>;
+let storage: ClientStorage;
 try {
   storage = window.localStorage;
 } catch {
@@ -36,6 +36,10 @@ try {
     getItem: (key) => memory.get(key) ?? null,
     setItem: (key, value) => void memory.set(key, value),
     removeItem: (key) => void memory.delete(key),
+    key: (index) => [...memory.keys()][index] ?? null,
+    get length() {
+      return memory.size;
+    },
   };
 }
 
@@ -77,5 +81,12 @@ miniquad_add_plugin({
       new Uint8Array(wasm_memory.buffer, ptr, cap).set(bytes.subarray(0, cap));
       return bytes.length;
     };
+
+    // 自分のデータを消す。結果はランキングと同じく、頼んでから状態を見る
+    const DELETE_STATUS = { idle: 0, deleting: 1, done: 2, failed: 3 } as const;
+    importObject.env.roommate_request_delete = () => {
+      void client.requestDelete();
+    };
+    importObject.env.roommate_delete_status = () => DELETE_STATUS[client.deleteState()];
   },
 });

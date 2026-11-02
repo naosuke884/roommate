@@ -26,7 +26,8 @@ function fakeApi(routes: Record<string, (call: Call) => [number, unknown]>) {
     calls.push(call);
     const route = routes[`${call.method} ${call.path}`];
     const [status, body] = route ? route(call) : [404, { error: 'not_found' }];
-    return new Response(JSON.stringify(body), { status });
+    // 204 は本文を持てない
+    return new Response(status === 204 ? null : JSON.stringify(body), { status });
   }) as typeof globalThis.fetch;
   return { fetch, calls };
 }
@@ -38,6 +39,10 @@ function memoryStorage(initial: Record<string, string> = {}) {
     getItem: (key: string) => data.get(key) ?? null,
     setItem: (key: string, value: string) => void data.set(key, value),
     removeItem: (key: string) => void data.delete(key),
+    key: (index: number) => [...data.keys()][index] ?? null,
+    get length() {
+      return data.size;
+    },
   };
 }
 
@@ -348,6 +353,12 @@ describe('Client', () => {
         throw new Error('denied');
       },
       removeItem: () => {},
+      key: () => {
+        throw new Error('denied');
+      },
+      get length(): number {
+        throw new Error('denied');
+      },
     };
     const api = fakeApi({
       'POST /players': () => [201, issued],
@@ -356,6 +367,144 @@ describe('Client', () => {
     const c = client(api, throwing);
     expect(await c.token()).toBe('new-token');
     expect(c.bestScore()).toBe(5);
+  });
+});
+
+describe('Client.requestDelete', () => {
+  const stored = { playerId: 'p0', token: 'old', expiresAt: nowSeconds + 20 * 86400 };
+
+  function storageWithData() {
+    return memoryStorage({
+      'roommate.player': JSON.stringify(stored),
+      'roommate.best.g': '300',
+      'roommate.best.other': '50',
+      'roommate.pending.other': JSON.stringify([{ day: '2026-06-15', score: 1, durationMs: 1 }]),
+      unrelated: 'keep',
+    });
+  }
+
+  it('サーバーのデータと、端末の roommate. のキーをすべて消す', async () => {
+    const api = fakeApi({
+      'GET /games/g/scores/me': () => [200, { best: 300 }],
+      'DELETE /players/me': (call) => {
+        expect(call.auth).toBe('Bearer old');
+        return [204, null];
+      },
+    });
+    const storage = storageWithData();
+    const c = client(api, storage);
+    await c.token();
+
+    const deleting = c.requestDelete();
+    expect(c.deleteState()).toBe('deleting');
+    await deleting;
+
+    expect(c.deleteState()).toBe('done');
+    expect([...storage.data.keys()]).toEqual(['unrelated']);
+    expect(c.isReady()).toBe(false);
+    expect(c.bestScore()).toBeUndefined();
+    expect(await c.token()).toBeUndefined();
+  });
+
+  it('消したあとのスコアは、保存も送信もしない', async () => {
+    const api = fakeApi({
+      'GET /games/g/scores/me': () => [200, { best: null }],
+      'DELETE /players/me': () => [204, null],
+      'POST /players': () => [201, issued],
+    });
+    const storage = storageWithData();
+    const c = client(api, storage);
+    await c.requestDelete();
+
+    await c.submitScore(500, 60_000);
+    await settle();
+
+    expect(c.bestScore()).toBeUndefined();
+    expect([...storage.data.keys()]).toEqual(['unrelated']);
+    expect(api.calls.some((call) => call.path === '/games/g/scores')).toBe(false);
+    expect(api.calls.some((call) => call.path === '/players')).toBe(false);
+  });
+
+  it('送っている途中のスコアが終わるのを待ってから消し、新しい ID をもらわない', async () => {
+    let finishPost!: () => void;
+    const order: string[] = [];
+    const api = fakeApi({
+      'GET /games/g/scores/me': () => [200, { best: null }],
+      'POST /players': () => [201, issued],
+      'DELETE /players/me': () => {
+        order.push('delete');
+        return [204, null];
+      },
+    });
+    const fetch = (async (input: string, init: RequestInit = {}) => {
+      if (init.method === 'POST' && new URL(input).pathname === '/games/g/scores') {
+        await new Promise<void>((resolve) => (finishPost = resolve));
+        order.push('score');
+        return new Response(JSON.stringify({ best: 10 }), { status: 201 });
+      }
+      return api.fetch(input, init);
+    }) as typeof globalThis.fetch;
+    const storage = storageWithData();
+    const c = new Client({ apiOrigin: API, game: 'g', fetch, storage, now: () => NOW });
+    await c.token();
+
+    void c.submitScore(10, 60_000);
+    await settle();
+    const deleting = c.requestDelete();
+    await settle();
+    expect(order).toEqual([]);
+    finishPost();
+    await deleting;
+
+    expect(order).toEqual(['score', 'delete']);
+    expect(c.deleteState()).toBe('done');
+    expect(api.calls.some((call) => call.path === '/players')).toBe(false);
+  });
+
+  it('消せなければ failed にし、ID とスコアは残して送り続ける', async () => {
+    const api = fakeApi({
+      'GET /games/g/scores/me': () => [200, { best: 300 }],
+      'DELETE /players/me': () => [503, { error: 'unavailable' }],
+      'POST /games/g/scores': () => [201, { best: 400 }],
+    });
+    const storage = storageWithData();
+    const c = client(api, storage);
+    await c.requestDelete();
+
+    expect(c.deleteState()).toBe('failed');
+    expect(c.isReady()).toBe(true);
+    expect(storage.data.get('roommate.best.g')).toBe('300');
+
+    await c.submitScore(400, 60_000);
+    expect(api.calls.some((call) => call.path === '/games/g/scores')).toBe(true);
+  });
+
+  it('ID の発行に失敗していても、保存してあるトークンで消す', async () => {
+    const expired = { ...stored, expiresAt: nowSeconds - 1 };
+    const api = fakeApi({
+      'POST /players/me/token': () => [503, { error: 'unavailable' }],
+      'DELETE /players/me': (call) => {
+        expect(call.auth).toBe('Bearer old');
+        return [204, null];
+      },
+    });
+    const storage = memoryStorage({ 'roommate.player': JSON.stringify(expired) });
+    const c = client(api, storage);
+    await c.requestDelete();
+
+    expect(c.deleteState()).toBe('done');
+    expect(storage.data.size).toBe(0);
+  });
+
+  it('トークンが無ければ、端末のキーだけ消す', async () => {
+    const api = fakeApi({ 'POST /players': () => [503, { error: 'unavailable' }] });
+    const storage = memoryStorage({ 'roommate.best.g': '10' });
+    const c = client(api, storage);
+    await c.requestDelete();
+
+    expect(c.deleteState()).toBe('done');
+    expect(storage.data.size).toBe(0);
+    expect(api.calls.some((call) => call.method === 'DELETE')).toBe(false);
   });
 });
 

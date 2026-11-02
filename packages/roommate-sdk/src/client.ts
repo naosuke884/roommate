@@ -4,9 +4,12 @@ export interface ClientOptions {
   apiOrigin: string;
   game: string;
   fetch: typeof fetch;
-  storage: Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>;
+  storage: ClientStorage;
   now?: () => Date;
 }
+
+/** 使う localStorage の機能。自分のデータを消すときに、`roommate.` で始まるキーを数え上げる */
+export type ClientStorage = Pick<Storage, 'getItem' | 'setItem' | 'removeItem' | 'key' | 'length'>;
 
 interface StoredPlayer {
   playerId: string;
@@ -33,13 +36,17 @@ export type RankingState =
       myRank: number | null;
     };
 
+/** 自分のデータを消す要求の状態 */
+export type DeleteState = 'idle' | 'deleting' | 'done' | 'failed';
+
 interface PendingScore {
   day: string;
   score: number;
   durationMs: number;
 }
 
-const PLAYER_KEY = 'roommate.player';
+const KEY_PREFIX = 'roommate.';
+const PLAYER_KEY = `${KEY_PREFIX}player`;
 // 送れずに手元に残すスコアの数。超えたら古いものから捨てる
 const MAX_PENDING = 20;
 // 期限までこれより短くなったら、同じ ID で発行し直す
@@ -54,14 +61,18 @@ export class Client {
   private flushing: Promise<void> | undefined;
   private rankingValue: RankingState = { status: 'idle' };
   private rankingLoad: Promise<void> | undefined;
+  private deleteValue: DeleteState = 'idle';
+  private deleteRun: Promise<void> | undefined;
+  /** 消している間と消したあとは、スコアを送らない */
+  private holdScores = false;
   private readonly bestKey: string;
   private readonly pendingKey: string;
   private readonly now: () => Date;
 
   constructor(private readonly options: ClientOptions) {
     this.now = options.now ?? (() => new Date());
-    this.bestKey = `roommate.best.${options.game}`;
-    this.pendingKey = `roommate.pending.${options.game}`;
+    this.bestKey = `${KEY_PREFIX}best.${options.game}`;
+    this.pendingKey = `${KEY_PREFIX}pending.${options.game}`;
     const local = Number(this.read(this.bestKey));
     this.best = Number.isSafeInteger(local) && local > 0 ? local : undefined;
     this.ready = this.start();
@@ -129,6 +140,51 @@ export class Client {
     }
   }
 
+  /** 最後に頼んだ、自分のデータを消す要求の状態 */
+  deleteState(): DeleteState {
+    return this.deleteValue;
+  }
+
+  /**
+   * 自分の匿名 ID と、全ゲームのスコアをサーバーから消し、端末の `roommate.` のキーも消す。
+   * 結果は deleteState() で読む。消したあとは、ページを開き直すまで ID を持たず、スコアも送らない。
+   * 消している間にもう一度呼んでも、二重には消さない
+   */
+  requestDelete(): Promise<void> {
+    if (this.deleteValue === 'deleting' && this.deleteRun) return this.deleteRun;
+    if (this.deleteValue === 'done') return Promise.resolve();
+    this.deleteValue = 'deleting';
+    this.holdScores = true;
+    this.deleteRun = this.deleteAll()
+      .then(() => {
+        this.deleteValue = 'done';
+      })
+      .catch(() => {
+        this.deleteValue = 'failed';
+        this.holdScores = false;
+      });
+    return this.deleteRun;
+  }
+
+  private async deleteAll() {
+    await this.ready;
+    // 送っている途中のスコアが 401 になると、新しい ID で送り直してしまう。終わるのを待ってから消す
+    await this.flushing?.catch(() => {});
+    const token = this.player?.token ?? this.storedPlayer()?.token;
+    if (token) {
+      const res = await this.options.fetch(`${this.options.apiOrigin}/players/me`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    }
+    this.removeAllKeys();
+    this.player = undefined;
+    this.ready = Promise.resolve(undefined);
+    this.best = undefined;
+    this.rankingValue = { status: 'idle' };
+  }
+
   /** ほかの JS(影の通信など)がトークンを使うとき用。取れなければ undefined */
   async token(): Promise<string | undefined> {
     return (await this.ready)?.token;
@@ -139,6 +195,8 @@ export class Client {
    * 送れなかったスコアは手元に残し、次に送るときや次に開いたときに送り直す
    */
   submitScore(score: number, durationMs: number): Promise<void> {
+    // 消したあとのスコアは、保存も送信もしない
+    if (this.deleteValue === 'done') return Promise.resolve();
     this.raiseBest(score);
     this.enqueue({ day: courseDay(this.now()), score, durationMs });
     return this.flush().catch(() => {
@@ -148,12 +206,14 @@ export class Client {
 
   /** 手元に残っているスコアを古い順に送る。送れなかった分は残す */
   private async flush() {
+    if (this.holdScores) return;
     if (this.flushing) return this.flushing;
     this.flushing = (async () => {
       try {
         const player = await this.ready;
         if (!player) return;
         for (;;) {
+          if (this.holdScores) return;
           const [next] = this.pending();
           if (!next) return;
           if ((await this.deliver(next)) === 'retry') return;
@@ -310,6 +370,22 @@ export class Client {
 
   private gamePath() {
     return `${this.options.apiOrigin}/games/${encodeURIComponent(this.options.game)}`;
+  }
+
+  /** このゲームのものに限らず、`roommate.` で始まるキーをすべて消す */
+  private removeAllKeys() {
+    const keys: string[] = [];
+    try {
+      for (let i = 0; i < this.options.storage.length; i++) {
+        const key = this.options.storage.key(i);
+        if (key?.startsWith(KEY_PREFIX)) keys.push(key);
+      }
+    } catch {
+      // 数え上げられなくても、このゲームのキーは消す
+    }
+    for (const key of new Set([...keys, PLAYER_KEY, this.bestKey, this.pendingKey])) {
+      this.remove(key);
+    }
   }
 
   // プライベートブラウズなどで localStorage が使えなくても止まらないようにする

@@ -1,4 +1,4 @@
-//! roommate のゲームから、匿名 ID・スコア・自己ベストを使う。
+//! roommate のゲームから、匿名 ID・スコア・自己ベストを使い、自分のデータを消す。
 //!
 //! ブラウザでは `roommate-sdk.js` が macroquad の JS ローダーのプラグインとして用意する関数を呼ぶ。
 //! `roommate-sdk.js` は `mq_js_bundle.js` の後、`load()` の前に読み込む。
@@ -11,7 +11,7 @@
 
 #[cfg(target_arch = "wasm32")]
 mod imp {
-    use super::{Ranking, RankingEntry, RankingStatus};
+    use super::{DeleteStatus, Ranking, RankingEntry, RankingStatus};
     #[link(wasm_import_module = "env")]
     extern "C" {
         fn roommate_is_ready() -> f64;
@@ -24,6 +24,8 @@ mod imp {
         fn roommate_ranking_rank(i: f64) -> f64;
         fn roommate_ranking_score(i: f64) -> f64;
         fn roommate_ranking_name(i: f64, ptr: *mut u8, cap: f64) -> f64;
+        fn roommate_request_delete();
+        fn roommate_delete_status() -> f64;
     }
 
     pub fn is_ready() -> bool {
@@ -80,11 +82,24 @@ mod imp {
         buf.truncate(len);
         String::from_utf8_lossy(&buf).into_owned()
     }
+
+    pub fn request_delete() {
+        unsafe { roommate_request_delete() }
+    }
+
+    pub fn delete_status() -> DeleteStatus {
+        match unsafe { roommate_delete_status() } as u32 {
+            1 => DeleteStatus::Deleting,
+            2 => DeleteStatus::Done,
+            3 => DeleteStatus::Failed,
+            _ => DeleteStatus::NotRequested,
+        }
+    }
 }
 
 #[cfg(not(target_arch = "wasm32"))]
 mod imp {
-    use super::{Ranking, RankingStatus};
+    use super::{DeleteStatus, Ranking, RankingStatus};
     use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 
     // 0 は「まだ無い」。スコア 0 は自己ベストとして覚えなくてよい
@@ -102,7 +117,9 @@ mod imp {
     }
 
     pub fn submit_score(score: u32, _duration_ms: u32) {
-        BEST.fetch_max(score, Ordering::Relaxed);
+        if !DELETED.load(Ordering::Relaxed) {
+            BEST.fetch_max(score, Ordering::Relaxed);
+        }
     }
 
     static RANKING_REQUESTED: AtomicBool = AtomicBool::new(false);
@@ -117,6 +134,22 @@ mod imp {
             RankingStatus::Ready(Ranking::default())
         } else {
             RankingStatus::NotRequested
+        }
+    }
+
+    static DELETED: AtomicBool = AtomicBool::new(false);
+
+    // 通信しないので、頼まれたらすぐ自己ベストを忘れて消し終える
+    pub fn request_delete() {
+        DELETED.store(true, Ordering::Relaxed);
+        BEST.store(0, Ordering::Relaxed);
+    }
+
+    pub fn delete_status() -> DeleteStatus {
+        if DELETED.load(Ordering::Relaxed) {
+            DeleteStatus::Done
+        } else {
+            DeleteStatus::NotRequested
         }
     }
 }
@@ -148,6 +181,15 @@ pub enum RankingStatus {
     Failed,
 }
 
+/// [`request_delete`] で頼んだ、自分のデータを消す要求の状態
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DeleteStatus {
+    NotRequested,
+    Deleting,
+    Done,
+    Failed,
+}
+
 /// 匿名 ID の準備ができたか。できる前に送ったスコアは、準備ができてから送られる
 pub fn is_ready() -> bool {
     imp::is_ready()
@@ -175,17 +217,37 @@ pub fn ranking() -> RankingStatus {
     imp::ranking()
 }
 
+/// 自分の匿名 ID と、全ゲームのスコアを消し始める。結果は [`delete_status`] で見る。
+/// ID はゲームをまたいで共通なので、ほかのゲームのスコアと自己ベストも消える。
+/// 消し終えたあとは、ページを開き直すまで ID を持たず、送ったスコアも保存しない
+pub fn request_delete() {
+    imp::request_delete()
+}
+
+/// 頼んだ、自分のデータを消す要求の状態。`Failed` ならデータは残っていて、頼み直せる
+pub fn delete_status() -> DeleteStatus {
+    imp::delete_status()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
-    fn ネイティブでは送ったスコアの最大を自己ベストとして覚える() {
+    fn ネイティブでは送ったスコアの最大を自己ベストとして覚え_消すと忘れる() {
         assert_eq!(best_score(), None);
         submit_score(120, 60_000);
         submit_score(80, 60_000);
         assert_eq!(best_score(), Some(120));
         assert!(!is_ready());
+
+        // 静的な状態を共有するので、消したあとの確かめも同じテストで続けて行う
+        assert_eq!(delete_status(), DeleteStatus::NotRequested);
+        request_delete();
+        assert_eq!(delete_status(), DeleteStatus::Done);
+        assert_eq!(best_score(), None);
+        submit_score(50, 60_000);
+        assert_eq!(best_score(), None);
     }
 
     #[test]
