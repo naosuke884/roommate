@@ -29,3 +29,15 @@ players.post('/me/token', requireRefreshablePlayer, async (c) => {
 });
 
 players.get('/me', requirePlayer, (c) => c.json({ playerId: c.get('playerId') }));
+
+// 本人が自分の ID と全ゲームのスコアを消す。発行し直せる間のトークンなら、期限切れでも消せる。
+// すでに消えた ID でも 204 を返し、応答が届かずに送り直したときも成功にする
+players.delete('/me', requireRefreshablePlayer, async (c) => {
+  const playerId = c.get('playerId');
+  // scores は players を参照するので、scores から先に消す
+  await c.env.DB.batch([
+    c.env.DB.prepare('DELETE FROM scores WHERE player_id = ?').bind(playerId),
+    c.env.DB.prepare('DELETE FROM players WHERE id = ?').bind(playerId),
+  ]);
+  return c.body(null, 204);
+});

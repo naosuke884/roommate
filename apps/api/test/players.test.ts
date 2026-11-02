@@ -3,7 +3,7 @@ import { env } from 'cloudflare:workers';
 import { sign } from 'hono/jwt';
 import { describe, expect, it } from 'vitest';
 import { REFRESH_GRACE_SECONDS, TOKEN_TTL_SECONDS, issuePlayerToken } from '../src/auth.ts';
-import { type TokenBody, issuePlayer as issue, request } from './helpers.ts';
+import { type TokenBody, issuePlayer as issue, request, today } from './helpers.ts';
 
 describe('POST /players', () => {
   it('新しい ID を発行して保存し、30 日有効なトークンを返す', async () => {
@@ -116,6 +116,80 @@ describe('POST /players/me/token', () => {
   });
 });
 
+describe('DELETE /players/me', () => {
+  async function postScore(token: string, game = 'grapnl') {
+    const res = await request(`/games/${game}/scores`, {
+      method: 'POST',
+      token,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ day: today(), score: 10, durationMs: 60_000 }),
+    });
+    expect(res.status).toBe(201);
+  }
+
+  it('自分のスコアとプレイヤーの行を消し、ほかの人のスコアは残す', async () => {
+    const me = await issue();
+    const other = await issue();
+    await postScore(me.token);
+    await postScore(other.token);
+
+    const res = await request('/players/me', { method: 'DELETE', token: me.token });
+    expect(res.status).toBe(204);
+
+    const count = (id: string) =>
+      env.DB.prepare(
+        'SELECT (SELECT COUNT(*) FROM scores WHERE player_id = ?1) + (SELECT COUNT(*) FROM players WHERE id = ?1) AS n',
+      )
+        .bind(id)
+        .first<{ n: number }>();
+    expect(await count(me.playerId)).toEqual({ n: 0 });
+    expect(await count(other.playerId)).toEqual({ n: 2 });
+  });
+
+  it('消したあとは、そのトークンでスコアを保存できない', async () => {
+    const me = await issue();
+    await request('/players/me', { method: 'DELETE', token: me.token });
+    const res = await request('/games/grapnl/scores', {
+      method: 'POST',
+      token: me.token,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ day: today(), score: 10, durationMs: 60_000 }),
+    });
+    expect(res.status).toBe(401);
+  });
+
+  it('すでに消えた ID でも 204 を返す', async () => {
+    const me = await issue();
+    await request('/players/me', { method: 'DELETE', token: me.token });
+    const res = await request('/players/me', { method: 'DELETE', token: me.token });
+    expect(res.status).toBe(204);
+  });
+
+  it('期限切れでも猶予の間なら消せる', async () => {
+    const { playerId } = await issue();
+    const issuedAt = Math.floor(Date.now() / 1000) - TOKEN_TTL_SECONDS - 90 * 86400;
+    const { token } = await issuePlayerToken(playerId, env.JWT_SECRET, issuedAt);
+    const res = await request('/players/me', { method: 'DELETE', token });
+    expect(res.status).toBe(204);
+    const row = await env.DB.prepare('SELECT 1 FROM players WHERE id = ?').bind(playerId).first();
+    expect(row).toBeNull();
+  });
+
+  it('別の鍵で署名したトークンでは消せない', async () => {
+    const { playerId } = await issue();
+    const { token } = await issuePlayerToken(playerId, 'another-secret');
+    const res = await request('/players/me', { method: 'DELETE', token });
+    expect(res.status).toBe(401);
+    const row = await env.DB.prepare('SELECT 1 FROM players WHERE id = ?').bind(playerId).first();
+    expect(row).not.toBeNull();
+  });
+
+  it('トークンが無ければ 401 を返す', async () => {
+    const res = await request('/players/me', { method: 'DELETE' });
+    expect(res.status).toBe(401);
+  });
+});
+
 describe('CORS', () => {
   it('許可した origin には Access-Control-Allow-Origin を返す', async () => {
     const origin = siteOrigin;
@@ -124,6 +198,14 @@ describe('CORS', () => {
       headers: { Origin: origin, 'Access-Control-Request-Method': 'POST' },
     });
     expect(res.headers.get('Access-Control-Allow-Origin')).toBe(origin);
+  });
+
+  it('DELETE の preflight を許す', async () => {
+    const res = await request('/players/me', {
+      method: 'OPTIONS',
+      headers: { Origin: siteOrigin, 'Access-Control-Request-Method': 'DELETE' },
+    });
+    expect(res.headers.get('Access-Control-Allow-Methods')).toContain('DELETE');
   });
 
   it('許可していない origin には返さない', async () => {
