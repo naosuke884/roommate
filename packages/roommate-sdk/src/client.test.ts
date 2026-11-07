@@ -594,6 +594,82 @@ describe('Client.requestDelete', () => {
   });
 });
 
+describe('Client の名前', () => {
+  const stored = { playerId: 'p0', token: 'old', expiresAt: nowSeconds + 20 * 86400 };
+  const withPlayer = (extra: Record<string, string> = {}) =>
+    memoryStorage({ 'roommate.player': JSON.stringify(stored), ...extra });
+
+  it('名前が無く、まだ聞いていなければ聞く', async () => {
+    const api = fakeApi({ 'GET /players/me': () => [200, { playerId: 'p0', name: null }] });
+    const c = client(api, withPlayer());
+    expect(await c.shouldAskName()).toBe(true);
+    expect(c.name()).toBeNull();
+  });
+
+  it('名前があれば聞かない', async () => {
+    const api = fakeApi({ 'GET /players/me': () => [200, { playerId: 'p0', name: 'あおい' }] });
+    const c = client(api, withPlayer());
+    expect(await c.shouldAskName()).toBe(false);
+    expect(c.name()).toBe('あおい');
+  });
+
+  it('一度聞いたら、名前が無くても次からは聞かない', async () => {
+    const api = fakeApi({ 'GET /players/me': () => [200, { playerId: 'p0', name: null }] });
+    const storage = withPlayer();
+    client(api, storage).markNameAsked();
+    expect(await client(api, storage).shouldAskName()).toBe(false);
+    expect(api.calls.filter((call) => call.path === '/players/me')).toEqual([]);
+  });
+
+  it('名前を読めなければ聞かない', async () => {
+    const api = fakeApi({ 'GET /players/me': () => [500, {}] });
+    expect(await client(api, withPlayer()).shouldAskName()).toBe(false);
+  });
+
+  it('名前を付けると保存し、聞いたことも覚える', async () => {
+    const api = fakeApi({ 'PUT /players/me/name': (call) => [200, call.body] });
+    const storage = withPlayer();
+    const c = client(api, storage);
+    expect(await c.setName('あおい')).toBe('saved');
+    expect(c.name()).toBe('あおい');
+    expect(storage.data.get('roommate.name-asked')).toBe('1');
+    const put = api.calls.find((call) => call.method === 'PUT')!;
+    expect(put.auth).toBe('Bearer old');
+    expect(put.body).toEqual({ name: 'あおい' });
+  });
+
+  it('受け付けられない名前なら invalid、通信できなければ failed を返す', async () => {
+    const invalid = fakeApi({ 'PUT /players/me/name': () => [400, { error: 'invalid_name' }] });
+    expect(await client(invalid, withPlayer()).setName('a#b')).toBe('invalid');
+    const down = fakeApi({ 'PUT /players/me/name': () => [503, {}] });
+    expect(await client(down, withPlayer()).setName('あおい')).toBe('failed');
+  });
+
+  it('トークンが通らなければ、ID をもらい直して付け直す', async () => {
+    const api = fakeApi({
+      'POST /players': () => [201, issued],
+      'PUT /players/me/name': (call) =>
+        call.auth === 'Bearer new-token' ? [200, call.body] : [401, { error: 'unauthorized' }],
+    });
+    const c = client(api, withPlayer());
+    expect(await c.setName('あおい')).toBe('saved');
+    expect(await c.token()).toBe('new-token');
+  });
+
+  it('消したあとは聞かず、付けもしない', async () => {
+    const api = fakeApi({
+      'DELETE /players/me': () => [204, null],
+      'GET /players/me': () => [200, { playerId: 'p0', name: null }],
+    });
+    const storage = withPlayer({ 'roommate.name-asked': '1' });
+    const c = client(api, storage);
+    await c.requestDelete();
+    expect(storage.data.has('roommate.name-asked')).toBe(false);
+    expect(await c.shouldAskName()).toBe(false);
+    expect(await c.setName('あおい')).toBe('failed');
+  });
+});
+
 describe('courseDay', () => {
   it('端末の時間帯にかかわらず UTC の日付を返す', () => {
     expect(courseDay(new Date('2026-01-05T23:30:00+09:00'))).toBe('2026-01-05');

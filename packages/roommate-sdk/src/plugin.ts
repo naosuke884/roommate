@@ -2,6 +2,7 @@
 //   <script src="roommate-sdk.js" data-game="<slug>"></script>
 // data-api で API の origin を変えられる(開発用)。
 import { Client, type ClientStorage } from './client.ts';
+import { type NameDialog, createNameDialog } from './name-dialog.ts';
 
 declare function miniquad_add_plugin(plugin: {
   register_plugin: (importObject: { env: Record<string, unknown> }) => void;
@@ -14,7 +15,13 @@ declare const wasm_memory: WebAssembly.Memory;
 
 declare global {
   interface Window {
-    roommate?: { client: Client };
+    roommate?: {
+      client: Client;
+      /** ランキングに出す名前を変える入力欄を開く。ゲームの「名前を変える」ボタンなどから呼ぶ */
+      openNameDialog: () => void;
+      /** 名前の入力欄を開いているか。開いている間はゲームを止める */
+      isNameDialogOpen: () => boolean;
+    };
   }
 }
 
@@ -49,7 +56,17 @@ const client = new Client({
   fetch: window.fetch.bind(window),
   storage,
 });
-window.roommate = { client };
+const nameDialog: NameDialog = createNameDialog(client);
+window.roommate = {
+  client,
+  openNameDialog: () => nameDialog.open('change'),
+  isNameDialogOpen: () => nameDialog.isOpen(),
+};
+
+// 名前をまだ付けていない人には、最初に一度だけ入力欄を出す
+void client.shouldAskName().then((ask) => {
+  if (ask) nameDialog.open('first');
+});
 
 miniquad_add_plugin({
   name: 'roommate_sdk',
@@ -88,5 +105,9 @@ miniquad_add_plugin({
       void client.requestDelete();
     };
     importObject.env.roommate_delete_status = () => DELETE_STATUS[client.deleteState()];
+
+    // 名前の入力欄。開いている間はキー入力が入力欄へ行くので、ゲームは止めておく
+    importObject.env.roommate_open_name_dialog = () => nameDialog.open('change');
+    importObject.env.roommate_name_dialog_open = () => (nameDialog.isOpen() ? 1 : 0);
   },
 });

@@ -1,4 +1,4 @@
-//! roommate のゲームから、匿名 ID・スコア・自己ベストを使い、自分のデータを消す。
+//! roommate のゲームから、匿名 ID・名前・スコア・自己ベストを使い、自分のデータを消す。
 //!
 //! ブラウザでは `roommate-sdk.js` が macroquad の JS ローダーのプラグインとして用意する関数を呼ぶ。
 //! `roommate-sdk.js` は `mq_js_bundle.js` の後、`load()` の前に読み込む。
@@ -6,6 +6,9 @@
 //! ```html
 //! <script src="roommate-sdk.js" data-game="grapnl"></script>
 //! ```
+//!
+//! 名前をまだ付けていない人には、`roommate-sdk.js` が最初に一度だけ名前の入力欄を出す。
+//! あとから変えられるよう、ゲームの「名前を変える」ボタンなどから [`open_name_dialog`] を呼ぶ。
 //!
 //! ネイティブ実行(開発用)では通信せず、自己ベストは起動している間だけ覚える。
 
@@ -26,6 +29,8 @@ mod imp {
         fn roommate_ranking_name(i: f64, ptr: *mut u8, cap: f64) -> f64;
         fn roommate_request_delete();
         fn roommate_delete_status() -> f64;
+        fn roommate_open_name_dialog();
+        fn roommate_name_dialog_open() -> f64;
     }
 
     pub fn is_ready() -> bool {
@@ -95,6 +100,14 @@ mod imp {
             _ => DeleteStatus::NotRequested,
         }
     }
+
+    pub fn open_name_dialog() {
+        unsafe { roommate_open_name_dialog() }
+    }
+
+    pub fn is_name_dialog_open() -> bool {
+        unsafe { roommate_name_dialog_open() != 0.0 }
+    }
 }
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -152,13 +165,20 @@ mod imp {
             DeleteStatus::NotRequested
         }
     }
+
+    // 入力欄はブラウザにしか無いので、何もしない
+    pub fn open_name_dialog() {}
+
+    pub fn is_name_dialog_open() -> bool {
+        false
+    }
 }
 
 /// ランキングの 1 行
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RankingEntry {
     pub rank: u32,
-    /// 「名無し#1a2b」のような表示名
+    /// 「あおい#1a2b」のような表示名。名前の無い人は「名無し#1a2b」
     pub name: String,
     pub score: u32,
 }
@@ -227,6 +247,17 @@ pub fn request_delete() {
 /// 頼んだ、自分のデータを消す要求の状態。`Failed` ならデータは残っていて、頼み直せる
 pub fn delete_status() -> DeleteStatus {
     imp::delete_status()
+}
+
+/// ランキングに出す名前を変える入力欄を開く。ゲームの「名前を変える」ボタンなどから呼ぶ。
+/// 開いている間はキー入力が入力欄へ行くので、[`is_name_dialog_open`] を見てゲームを止める
+pub fn open_name_dialog() {
+    imp::open_name_dialog()
+}
+
+/// 名前の入力欄を開いているか。最初に自動で開いたときも含む
+pub fn is_name_dialog_open() -> bool {
+    imp::is_name_dialog_open()
 }
 
 #[cfg(test)]

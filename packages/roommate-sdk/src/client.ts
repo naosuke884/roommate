@@ -1,4 +1,4 @@
-/** 匿名 ID・スコア・自己ベストを受け持つ。ブラウザの API は外から渡し、テストで差し替えられるようにする */
+/** 匿名 ID・名前・スコア・自己ベストを受け持つ。ブラウザの API は外から渡し、テストで差し替えられるようにする */
 
 export interface ClientOptions {
   apiOrigin: string;
@@ -39,6 +39,12 @@ export type RankingState =
 /** 自分のデータを消す要求の状態 */
 export type DeleteState = 'idle' | 'deleting' | 'done' | 'failed';
 
+/** 名前を付けた結果。invalid は API が受け付けない名前、failed は通信やサーバーの失敗 */
+export type SetNameResult = 'saved' | 'invalid' | 'failed';
+
+/** 名前の長さの上限(API と同じ)。文字(コードポイント)で数える */
+export const MAX_NAME_LENGTH = 12;
+
 interface PendingScore {
   day: string;
   score: number;
@@ -47,6 +53,8 @@ interface PendingScore {
 
 const KEY_PREFIX = 'roommate.';
 const PLAYER_KEY = `${KEY_PREFIX}player`;
+// 名前の入力欄を一度出したら立てる。閉じた人に、開くたびに出さないため
+const NAME_ASKED_KEY = `${KEY_PREFIX}name-asked`;
 // 送れずに手元に残すスコアの数。超えたら古いものから捨てる
 const MAX_PENDING = 20;
 // 期限までこれより短くなったら、同じ ID で発行し直す
@@ -63,6 +71,8 @@ export class Client {
   private rankingLoad: Promise<void> | undefined;
   private deleteValue: DeleteState = 'idle';
   private deleteRun: Promise<void> | undefined;
+  /** ランキングに出す名前。null は名前なし、undefined はまだわからない */
+  private nameValue: string | null | undefined;
   /** 消している間と消したあとは、スコアを送らない */
   private holdScores = false;
   private readonly bestKey: string;
@@ -182,7 +192,77 @@ export class Client {
     this.player = undefined;
     this.ready = Promise.resolve(undefined);
     this.best = undefined;
+    this.nameValue = undefined;
     this.rankingValue = { status: 'idle' };
+  }
+
+  /** ランキングに出す名前。null は名前なし、undefined はまだ読んでいない */
+  name(): string | null | undefined {
+    return this.nameValue;
+  }
+
+  /** 名前を API から読む。読めなければ undefined */
+  async loadName(): Promise<string | null | undefined> {
+    const player = await this.ready;
+    if (!player || this.deleteValue === 'done') return undefined;
+    try {
+      const res = await this.options.fetch(`${this.options.apiOrigin}/players/me`, {
+        headers: { Authorization: `Bearer ${player.token}` },
+      });
+      if (!res.ok) return undefined;
+      this.nameValue = ((await res.json()) as { name: string | null }).name;
+    } catch {
+      return undefined;
+    }
+    return this.nameValue;
+  }
+
+  /**
+   * 最初に名前を聞くべきか。ID があり、名前が無く、まだ一度も聞いていなければ true。
+   * 名前を読めなければ false
+   */
+  async shouldAskName(): Promise<boolean> {
+    if (this.read(NAME_ASKED_KEY) !== null) return false;
+    const name = await this.loadName();
+    return name === null && this.read(NAME_ASKED_KEY) === null;
+  }
+
+  /** 名前を聞いたことを覚え、次に開いたときは聞かない */
+  markNameAsked() {
+    this.write(NAME_ASKED_KEY, '1');
+  }
+
+  /** ランキングに出す名前を付ける・変える。空にすると「名無し」に戻す */
+  async setName(name: string): Promise<SetNameResult> {
+    if (this.deleteValue !== 'idle' && this.deleteValue !== 'failed') return 'failed';
+    let player = await this.ready;
+    if (!player) return 'failed';
+    const body = JSON.stringify({ name });
+    let res: Response;
+    try {
+      res = await this.putName(player, body);
+      // トークンが通らなくなったら、スコアの送信と同じく ID をもらい直して付け直す
+      if (res.status === 401) {
+        player = await this.reissue();
+        if (!player) return 'failed';
+        res = await this.putName(player, body);
+      }
+      if (res.status === 400) return 'invalid';
+      if (!res.ok) return 'failed';
+      this.nameValue = ((await res.json()) as { name: string | null }).name;
+    } catch {
+      return 'failed';
+    }
+    this.markNameAsked();
+    return 'saved';
+  }
+
+  private putName(player: StoredPlayer, body: string): Promise<Response> {
+    return this.options.fetch(`${this.options.apiOrigin}/players/me/name`, {
+      method: 'PUT',
+      headers: { Authorization: `Bearer ${player.token}`, 'Content-Type': 'application/json' },
+      body,
+    });
   }
 
   /** ほかの JS(影の通信など)がトークンを使うとき用。取れなければ undefined */
@@ -395,7 +475,13 @@ export class Client {
     } catch {
       // 数え上げられなくても、このゲームのキーは消す
     }
-    for (const key of new Set([...keys, PLAYER_KEY, this.bestKey, this.pendingKey])) {
+    for (const key of new Set([
+      ...keys,
+      PLAYER_KEY,
+      NAME_ASKED_KEY,
+      this.bestKey,
+      this.pendingKey,
+    ])) {
       this.remove(key);
     }
   }
