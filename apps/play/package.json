@@ -12,9 +12,9 @@
     "@roommate/catalog": "workspace:*"
   },
   "devDependencies": {
-    "@cloudflare/vitest-plugin": "^1.4.11",
+    "@cloudflare/vitest-plugin": "^1.5.1",
     "typescript": "~6.0.3",
-    "vitest": "^5.0.5",
-    "wrangler": "^4.156.0"
+    "vitest": "^5.1.0",
+    "wrangler": "^4.157.0"
   }
 }
