@@ -97,17 +97,24 @@ const ogImage = new URL('/og.png', Astro.site);
     color: var(--fg);
     font-family: system-ui, sans-serif;
     line-height: 1.7;
+    /* 中身が短いページでもフッターを画面の下に置く */
+    display: flex;
+    flex-direction: column;
+    min-height: 100dvh;
   }
 
   header,
   main,
   footer {
+    box-sizing: border-box;
+    width: 100%;
     max-width: 64rem;
     margin: 0 auto;
     padding: 1rem 1.25rem;
   }
 
   main {
+    flex: 1 0 auto;
     padding-bottom: 3rem;
   }
 
