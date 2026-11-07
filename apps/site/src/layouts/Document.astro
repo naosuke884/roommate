@@ -1,0 +1,55 @@
+---
+import Base from './Base.astro';
+
+interface Props {
+  title: string;
+  description: string;
+  /** 制定日。YYYY-MM-DD */
+  established: string;
+}
+
+const { title, description, established } = Astro.props;
+---
+
+<Base title={title} description={description}>
+  <article class="document">
+    <h1>{title}</h1>
+    <slot />
+    <p class="established">
+      制定日: <time datetime={established}>{established}</time>
+    </p>
+  </article>
+</Base>
+
+<style>
+  .document {
+    max-width: 42rem;
+  }
+
+  h1 {
+    margin: 1rem 0 1.5rem;
+    font-family: var(--font-brand);
+    font-size: 1.75rem;
+    line-height: 1.3;
+  }
+
+  .document :global(h2) {
+    margin: 2rem 0 0.5rem;
+    font-size: 1.125rem;
+  }
+
+  .document :global(p),
+  .document :global(ul) {
+    margin: 0 0 0.75rem;
+  }
+
+  .document :global(ul) {
+    padding-left: 1.25rem;
+  }
+
+  .established {
+    margin-top: 2.5rem;
+    color: var(--muted);
+    font-size: 0.875rem;
+  }
+</style>

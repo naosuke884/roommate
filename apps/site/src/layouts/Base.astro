@@ -51,6 +51,11 @@ const ogImage = new URL('/og.png', Astro.site);
     <main>
       <slot />
     </main>
+    <footer>
+      <nav aria-label="サイトの情報">
+        <a href="/privacy/">プライバシーポリシー</a>
+      </nav>
+    </footer>
   </body>
 </html>
 
@@ -94,7 +99,8 @@ const ogImage = new URL('/og.png', Astro.site);
   }
 
   header,
-  main {
+  main,
+  footer {
     max-width: 64rem;
     margin: 0 auto;
     padding: 1rem 1.25rem;
@@ -106,7 +112,8 @@ const ogImage = new URL('/og.png', Astro.site);
 
   @media (min-width: 40rem) {
     header,
-    main {
+    main,
+    footer {
       padding-left: 2.5rem;
       padding-right: 2.5rem;
     }
@@ -114,6 +121,20 @@ const ogImage = new URL('/og.png', Astro.site);
 
   a {
     color: inherit;
+  }
+
+  footer {
+    padding-top: 1.5rem;
+    padding-bottom: 2rem;
+    border-top: 1px solid var(--line);
+    color: var(--muted);
+    font-size: 0.875rem;
+  }
+
+  footer nav {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem 1.5rem;
   }
 
   :focus-visible {
