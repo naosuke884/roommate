@@ -90,29 +90,6 @@ const image = gameImages[game.slug];
     gap: 0.5rem 1rem;
   }
 
-  :global(.playing) {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.5rem;
-    margin: 0;
-    color: var(--muted);
-    font-size: 0.875rem;
-    font-variant-numeric: tabular-nums;
-  }
-
-  /* 遊んでいる人がいるときは、点を付けて目立たせる */
-  :global(.playing[data-active])::before {
-    width: 0.5rem;
-    height: 0.5rem;
-    border-radius: 50%;
-    background: var(--apricot);
-    content: '';
-  }
-
-  :global(.playing b) {
-    color: var(--fg);
-  }
-
   .intro {
     display: grid;
     justify-items: start;

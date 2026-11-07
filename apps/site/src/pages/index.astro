@@ -1,6 +1,7 @@
 ---
 import { games, playUrl } from '@roommate/catalog';
 import { Image } from 'astro:assets';
+import Playing from '../components/Playing.tsx';
 import TopScore from '../components/TopScore.tsx';
 import { API_ORIGIN } from '../config.ts';
 import Base from '../layouts/Base.astro';
@@ -33,7 +34,10 @@ import { gameImages } from '../games.ts';
           </h3>
           <p>{game.description}</p>
           <div class="meta">
-            <TopScore client:load apiOrigin={API_ORIGIN} game={game.slug} />
+            <div class="stats">
+              <TopScore client:load apiOrigin={API_ORIGIN} game={game.slug} />
+              <Playing client:load apiOrigin={API_ORIGIN} game={game.slug} />
+            </div>
             {/* ゲームは配信用ドメインを直接開いて遊ぶ。戻るボタンでこのページへ戻れるよう、同じタブで移る */}
             <a class="button button-small" href={playUrl(game.slug)}>
               遊ぶ
@@ -139,6 +143,15 @@ import { gameImages } from '../games.ts';
     justify-content: space-between;
     gap: 0.5rem;
     margin-top: 0.5rem;
+  }
+
+  .stats {
+    display: grid;
+    gap: 0.125rem;
+  }
+
+  .stats :global(.playing) {
+    font-size: 0.8125rem;
   }
 
   /* 遊ぶボタンは、カード全体のリンクより手前に出す */
