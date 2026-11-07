@@ -1,18 +1,27 @@
-# 依存の更新を週 1 回、エコシステムごとに 1 つの PR にまとめる
+# 依存の更新 PR を Dependabot に作らせる。minor / patch は束ねて PR にまとめ、major は個別に確認する
+# (npm は dev / prod ごとに 1 本。Cargo は dev / prod の依存を分けて束ねられないので 1 本)
+# cooldown はリリースから 7 日経った版だけを提案させ、出たばかりの不具合版や乗っ取られたパッケージを避ける (セキュリティアップデートにはかからない)
+# commit-message の prefix は、初期設定の `Bump x from …` では Conventional Commits の形にならないため
 version: 2
 updates:
   - package-ecosystem: npm
     directory: /
     schedule:
       interval: weekly
+    cooldown:
+      default-days: 7
     ignore:
       # typescript-eslint が TypeScript 7 に対応するまで、メジャー更新は取らない
       # https://github.com/typescript-eslint/typescript-eslint/issues/10940
       - dependency-name: typescript
         update-types: ['version-update:semver-major']
     groups:
-      npm:
-        patterns: ['*']
+      dev-dependencies:
+        dependency-type: development
+        update-types: [minor, patch]
+      prod-dependencies:
+        dependency-type: production
+        update-types: [minor, patch]
     commit-message:
       prefix: build
       include: scope
@@ -21,9 +30,11 @@ updates:
     directory: /crates/roommate-sdk
     schedule:
       interval: weekly
+    cooldown:
+      default-days: 7
     groups:
       cargo:
-        patterns: ['*']
+        update-types: [minor, patch]
     commit-message:
       prefix: build
       include: scope
@@ -31,7 +42,7 @@ updates:
   - package-ecosystem: github-actions
     directory: /
     schedule:
-      interval: weekly
+      interval: monthly
     groups:
       github-actions:
         patterns: ['*']
