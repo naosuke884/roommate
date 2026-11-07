@@ -47,5 +47,11 @@
       "namespace_id": "1003",
       "simple": { "limit": 10, "period": 60 },
     },
+    {
+      // プレイヤーごとの部屋への接続。ゲームは日付が変わるときと、切れたときに入り直すだけ
+      "name": "ROOM_JOIN_LIMITER",
+      "namespace_id": "1004",
+      "simple": { "limit": 30, "period": 60 },
+    },
   ],
 }

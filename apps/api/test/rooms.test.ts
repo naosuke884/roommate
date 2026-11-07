@@ -2,7 +2,13 @@ import { playOrigin } from '@roommate/catalog';
 import { describe, expect, it } from 'vitest';
 import { env } from 'cloudflare:workers';
 import { issuePlayerToken } from '../src/auth.ts';
-import { MAX_MESSAGES_PER_SECOND, MAX_MESSAGE_BYTES, MAX_PEERS, gameOfRoom } from '../src/room.ts';
+import {
+  MAX_MESSAGES_PER_SECOND,
+  MAX_MESSAGE_BYTES,
+  MAX_PEERS,
+  REPLACED_CLOSE_CODE,
+  gameOfRoom,
+} from '../src/room.ts';
 import { issuePlayer, request } from './helpers.ts';
 
 // ゲームは配信用の origin から繋ぐ
@@ -178,6 +184,47 @@ describe('GET /rooms/:key', () => {
     expect(first[0]!.frames).toEqual([]);
   });
 
+  it('同じプレイヤーが入り直すと、前の接続を閉じて席を引き継ぎ、ほかの人には退出を知らせる', async () => {
+    const other = await connect('rejoin');
+    const { token } = await issuePlayer();
+    const first = await connect('rejoin', token);
+    const second = await connect('rejoin', token);
+
+    await waitFor(() => first.closed !== undefined);
+    expect(first.closed).toBe(REPLACED_CLOSE_CODE);
+    expect(second.peers).toEqual([other.id]);
+    await waitFor(() => other.texts.length >= 3);
+    expect(other.texts).toContainEqual({ type: 'leave', id: first.id });
+    expect(other.texts.filter((t) => (t as { type: string }).type === 'leave')).toHaveLength(1);
+  });
+
+  it('1 つのトークンでは、部屋の席を 1 つしか取れない', async () => {
+    const { token } = await issuePlayer();
+    let last: Peer | undefined;
+    for (let i = 0; i < MAX_PEERS; i++) {
+      last = await connect('hog', token);
+    }
+    // 1 人で埋められていれば次の部屋に回されて誰もいないはず。同じ部屋に入り、先にいるのは自分の 1 席だけ
+    const someone = await connect('hog');
+    expect(someone.peers).toEqual([last!.id]);
+  });
+
+  it('同じプレイヤーが部屋に入りすぎると 429 を返す', async () => {
+    const { token } = await issuePlayer();
+    const statuses: number[] = [];
+    // 上限は 1 分ごとの窓で数えるので、途中で窓が切り替わっても 1 つの窓で上限を超えるだけ送る
+    for (let i = 0; i < 61; i++) {
+      const res = await request(`/rooms/limit?token=${token}`, {
+        headers: { Upgrade: 'websocket', Origin: ORIGIN },
+      });
+      statuses.push(res.status);
+      res.webSocket?.accept();
+      res.webSocket?.close();
+    }
+    expect(statuses.slice(0, 20).every((s) => s === 101)).toBe(true);
+    expect(statuses).toContain(429);
+  });
+
   it('トークンが無ければ 401 を返す', async () => {
     const res = await request('/rooms/auth', { headers: { Upgrade: 'websocket', Origin: ORIGIN } });
     expect(res.status).toBe(401);
@@ -229,6 +276,19 @@ describe('GET /games/:slug/presence', () => {
     return now;
   }
 
+  it('同じプレイヤーが部屋をいくつ開いても 1 人と数える', async () => {
+    const before = await playing();
+    const { token } = await issuePlayer();
+    const peers = [];
+    for (let i = 1; i <= 3; i++) {
+      peers.push(await connect(`grapnl:same-player:${i}`, token));
+    }
+    expect(await playing()).toBe(before + 1);
+
+    for (const peer of peers) peer.ws.close();
+    expect(await playingBecomes(before)).toBe(before);
+  });
+
   it('そのゲームの部屋につながっている人数を足し、出た人は引く', async () => {
     const before = await playing();
     const a = await connect('grapnl:presence:1');
@@ -248,9 +308,9 @@ describe('GET /games/:slug/presence', () => {
   it('しばらく書き直されていない部屋は数えない', async () => {
     const before = await playing();
     await env.DB.prepare(
-      'INSERT INTO presence (room, game, players, updated_at) VALUES (?, ?, ?, ?)',
+      'INSERT INTO presence (room, player_id, game, updated_at) VALUES (?, ?, ?, ?)',
     )
-      .bind('grapnl:stale#0', 'grapnl', 5, Date.now() - 60 * 60 * 1000)
+      .bind('grapnl:stale#0', 'stale-player', 'grapnl', Date.now() - 60 * 60 * 1000)
       .run();
     expect(await playing()).toBe(before);
   });

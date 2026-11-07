@@ -7,14 +7,14 @@ const STALE_MS = PRESENCE_REFRESH_MS * 2 + 30_000;
 
 export const presence = new Hono<{ Bindings: Env }>();
 
-// 今そのゲームを開いている人数。ゲームが繋いでいる部屋の人数を足す
+// 今そのゲームを開いている人数。同じプレイヤーが部屋をいくつ開いていても 1 人と数える
 presence.get('/games/:slug/presence', async (c) => {
   const game = findGame(c.req.param('slug'));
   if (!game) {
     return c.json({ error: 'game_not_found' }, 404);
   }
   const row = await c.env.DB.prepare(
-    'SELECT COALESCE(SUM(players), 0) AS playing FROM presence WHERE game = ? AND updated_at > ?',
+    'SELECT COUNT(DISTINCT player_id) AS playing FROM presence WHERE game = ? AND updated_at > ?',
   )
     .bind(game.slug, Date.now() - STALE_MS)
     .first<{ playing: number }>();

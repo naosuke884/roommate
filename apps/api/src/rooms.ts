@@ -2,7 +2,7 @@ import { Hono } from 'hono';
 import { verificationSecrets, verifyPlayerToken } from './auth.ts';
 import { displayName } from './names.ts';
 import { isAllowedOrigin } from './origins.ts';
-import { DISPLAY_NAME_HEADER, ROOM_NAME_HEADER } from './room.ts';
+import { DISPLAY_NAME_HEADER, PLAYER_ID_HEADER, ROOM_NAME_HEADER } from './room.ts';
 
 // 部屋が埋まったら次の部屋に入れる。これを超えたら断る
 const MAX_SHARDS = 50;
@@ -28,12 +28,19 @@ rooms.get('/rooms/:key', async (c) => {
   if (!ROOM_KEY.test(key)) {
     return c.json({ error: 'invalid_room_key' }, 400);
   }
+  // 部屋を次々に開け閉めして、D1 への書き込みを増やされないようにする
+  const { success } = await c.env.ROOM_JOIN_LIMITER.limit({ key: playerId });
+  if (!success) {
+    return c.json({ error: 'too_many_requests' }, 429);
+  }
 
   // 部屋の他の人に見せる名前は、送る人の申告ではなくここで決める。ヘッダーは ASCII だけなので符号化して渡す
   const row = await c.env.DB.prepare('SELECT name FROM players WHERE id = ?')
     .bind(playerId)
     .first<{ name: string | null }>();
   const forwarded = new Request(c.req.raw);
+  // 部屋は、同じプレイヤーの前の接続を閉じて席を引き継ぎ、人数をプレイヤー単位で数える
+  forwarded.headers.set(PLAYER_ID_HEADER, playerId);
   forwarded.headers.set(
     DISPLAY_NAME_HEADER,
     encodeURIComponent(displayName(row?.name ?? null, playerId)),

@@ -8,12 +8,20 @@ export const FLUSH_INTERVAL_MS = 100;
 export const DISPLAY_NAME_HEADER = 'X-Roommate-Display-Name';
 /** 部屋の名前(`<キー>#<番号>`)。`rooms.ts` が URL 符号化して付ける。人数を書くときに使う */
 export const ROOM_NAME_HEADER = 'X-Roommate-Room';
+/** 部屋に入る人のプレイヤー ID。`rooms.ts` がトークンを確かめてから付ける */
+export const PLAYER_ID_HEADER = 'X-Roommate-Player';
+/** 同じプレイヤーが入り直したときに、前の接続を閉じる理由 */
+export const REPLACED_CLOSE_CODE = 4000;
 /** 人がいる間、人数を書き直す間隔。出入りが無くても行が古くならないようにする */
 export const PRESENCE_REFRESH_MS = 60_000;
 
 interface Attachment {
   peerId: number;
   name: string;
+  /** この変更より前に入った接続には無い */
+  playerId?: string;
+  /** 同じプレイヤーが入り直して閉じた接続。退出は入り直したときに知らせ終えている */
+  replaced?: boolean;
 }
 
 interface Frame {
@@ -37,10 +45,16 @@ export class Room extends DurableObject<Env> {
   private rates = new Map<WebSocket, { windowStart: number; count: number }>();
 
   override async fetch(request: Request): Promise<Response> {
-    const sockets = this.openSockets();
+    const playerId = request.headers.get(PLAYER_ID_HEADER) ?? undefined;
+    // 1 人が席をいくつも取らないよう、同じプレイヤーの前の接続は閉じて、その席を引き継ぐ
+    const previous = playerId
+      ? this.openSockets().filter((ws) => attachmentOf(ws).playerId === playerId)
+      : [];
+    const sockets = this.openSockets().filter((ws) => !previous.includes(ws));
     if (sockets.length >= MAX_PEERS) {
       return new Response('room is full', { status: 409 });
     }
+    for (const ws of previous) this.replace(ws);
 
     const room = decodeName(request.headers.get(ROOM_NAME_HEADER));
     if (room) this.ctx.storage.kv.put('room', room);
@@ -49,7 +63,11 @@ export class Room extends DurableObject<Env> {
     const peerId = this.nextPeerId(sockets);
     const name = decodeName(request.headers.get(DISPLAY_NAME_HEADER));
     this.ctx.acceptWebSocket(server);
-    server.serializeAttachment({ peerId, name } satisfies Attachment);
+    server.serializeAttachment({
+      peerId,
+      name,
+      ...(playerId && { playerId }),
+    } satisfies Attachment);
 
     server.send(
       JSON.stringify({
@@ -99,35 +117,60 @@ export class Room extends DurableObject<Env> {
 
   private async leave(ws: WebSocket) {
     this.rates.delete(ws);
-    this.broadcastText({ type: 'leave', id: peerOf(ws) }, ws);
+    if (!attachmentOf(ws).replaced) {
+      this.broadcastText({ type: 'leave', id: peerOf(ws) }, ws);
+    }
     await this.reportPresence(ws);
   }
 
+  /** 同じプレイヤーが入り直した前の接続を閉じる。ほかの人には、ここで退出を知らせる */
+  private replace(ws: WebSocket) {
+    ws.serializeAttachment({ ...attachmentOf(ws), replaced: true } satisfies Attachment);
+    this.rates.delete(ws);
+    this.broadcastText({ type: 'leave', id: peerOf(ws) }, ws);
+    try {
+      ws.close(REPLACED_CLOSE_CODE, 'replaced');
+    } catch {
+      // すでに閉じている
+    }
+  }
+
   /**
-   * 今つながっている人数を D1 に書く。誰もいなければ行を消す。
+   * 今いるプレイヤーを D1 に書き直す。人数はプレイヤー ID の重複を除いて数えるので、
+   * 1 人が部屋をいくつも開いても 1 人と数える。誰もいなければ行を消す。
    * 人がいる間はアラームで書き直し、部屋が止まっても古い行として数えられないようにする。
    * 書けなくても部屋は動かし続ける
    */
   private async reportPresence(leaving?: WebSocket) {
     const room = this.ctx.storage.kv.get<string>('room');
     if (!room) return;
-    const players = this.openSockets().filter((ws) => ws !== leaving).length;
+    const members = new Set(
+      this.openSockets()
+        .filter((ws) => ws !== leaving)
+        .map((ws) => {
+          const { playerId, peerId } = attachmentOf(ws);
+          // この変更より前に入った接続は ID を持たないので、接続ごとに 1 人と数える
+          return playerId ?? `peer:${room}:${peerId}`;
+        }),
+    );
+    const now = Date.now();
+    const clear = this.env.DB.prepare('DELETE FROM presence WHERE room = ?').bind(room);
+    const insert = this.env.DB.prepare(
+      'INSERT INTO presence (room, player_id, game, updated_at) VALUES (?, ?, ?, ?)',
+    );
     try {
-      if (players === 0) {
-        await this.env.DB.prepare('DELETE FROM presence WHERE room = ?').bind(room).run();
-        await this.ctx.storage.deleteAlarm();
-        return;
-      }
-      await this.env.DB.prepare(
-        `INSERT INTO presence (room, game, players, updated_at) VALUES (?1, ?2, ?3, ?4)
-         ON CONFLICT (room) DO UPDATE SET players = ?3, updated_at = ?4`,
-      )
-        .bind(room, gameOfRoom(room), players, Date.now())
-        .run();
+      await this.env.DB.batch([
+        clear,
+        ...[...members].map((member) => insert.bind(room, member, gameOfRoom(room), now)),
+      ]);
     } catch (error) {
       console.error('presence を書けなかった', error);
     }
-    await this.ctx.storage.setAlarm(Date.now() + PRESENCE_REFRESH_MS);
+    if (members.size === 0) {
+      await this.ctx.storage.deleteAlarm();
+      return;
+    }
+    await this.ctx.storage.setAlarm(now + PRESENCE_REFRESH_MS);
   }
 
   private flush() {
@@ -179,8 +222,12 @@ export class Room extends DurableObject<Env> {
   }
 }
 
+function attachmentOf(ws: WebSocket): Attachment {
+  return ws.deserializeAttachment() as Attachment;
+}
+
 function peerOf(ws: WebSocket): number {
-  return (ws.deserializeAttachment() as Attachment).peerId;
+  return attachmentOf(ws).peerId;
 }
 
 function nameOf(ws: WebSocket): string {
