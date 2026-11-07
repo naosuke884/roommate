@@ -17,6 +17,7 @@ const CONTENT_TYPES: Readonly<Record<string, string>> = {
   ogg: 'audio/ogg',
   png: 'image/png',
   svg: 'image/svg+xml',
+  ttf: 'font/ttf',
   txt: 'text/plain; charset=utf-8',
   wasm: 'application/wasm',
   wav: 'audio/wav',

@@ -61,6 +61,7 @@ describe('キャッシュと Content-Type', () => {
 
   it('wasm は application/wasm で、拡張子の無い名前は octet-stream', () => {
     expect(contentType('grapnl.wasm')).toBe('application/wasm');
+    expect(contentType('MPLUS1p-Bold-names.ttf')).toBe('font/ttf');
     expect(contentType('README')).toBe('application/octet-stream');
   });
 
