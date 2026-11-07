@@ -125,9 +125,33 @@ describe('配信', () => {
     expect(await (await request('/grapnl/mq_js_bundle.js?v=new')).text()).toBe('new');
   });
 
+  it('robots.txt はすべてを拒否し、ゲーム内の同名ファイルは配信する', async () => {
+    await put('grapnl/robots.txt', 'game file');
+    const body = 'User-agent: *\nDisallow: /\n';
+
+    const res = await request('/robots.txt');
+    expect(res.status).toBe(200);
+    expect(res.headers.get('Content-Type')).toBe('text/plain; charset=utf-8');
+    expect(res.headers.get('Cache-Control')).toBe('no-cache');
+    expect(res.headers.get('Content-Security-Policy')).toBe("frame-ancestors 'none'");
+    expect(await res.text()).toBe(body);
+
+    const head = await request('/robots.txt', 'HEAD');
+    expect(head.status).toBe(200);
+    expect(await head.text()).toBe('');
+    expect(head.headers.get('Content-Type')).toBe('text/plain; charset=utf-8');
+    expect(head.headers.get('Content-Length')).toBe(
+      String(new TextEncoder().encode(body).byteLength),
+    );
+
+    const nested = await request('/grapnl/robots.txt');
+    expect(nested.status).toBe(200);
+    expect(await nested.text()).toBe('game file');
+  });
+
   it('置いていないファイルと、カタログに無いゲームは 404 で、CSP を付ける', async () => {
     await put('other-game/index.html', 'secret');
-    for (const path of ['/grapnl/missing.js', '/other-game/', '/']) {
+    for (const path of ['/grapnl/missing.js', '/other-game/', '/', '/robots.txt/']) {
       const res = await request(path);
       expect(res.status).toBe(404);
       expect(res.headers.get('Content-Security-Policy')).toBe("frame-ancestors 'none'");
