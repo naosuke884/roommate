@@ -196,6 +196,11 @@ export class Client {
     this.rankingValue = { status: 'idle' };
   }
 
+  /** 匿名 ID。まだ無ければ undefined */
+  playerId(): string | undefined {
+    return this.player?.playerId;
+  }
+
   /** ランキングに出す名前。null は名前なし、undefined はまだ読んでいない */
   name(): string | null | undefined {
     return this.nameValue;
