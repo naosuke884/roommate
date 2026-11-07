@@ -4,9 +4,12 @@ export const MAX_PEERS = 20;
 export const MAX_MESSAGE_BYTES = 1024;
 export const MAX_MESSAGES_PER_SECOND = 30;
 export const FLUSH_INTERVAL_MS = 100;
+/** 部屋に入る人の表示名(「名前#1a2b」)。`rooms.ts` が URL 符号化して付ける */
+export const DISPLAY_NAME_HEADER = 'X-Roommate-Display-Name';
 
 interface Attachment {
   peerId: number;
+  name: string;
 }
 
 interface Frame {
@@ -19,7 +22,8 @@ interface Frame {
  *
  * - バイナリ: クライアントからは 1 つのバイト列。配るときは 100ms ぶんをまとめ、
  *   `[送信者 ID: u16][長さ: u16][バイト列]` を繰り返した 1 つのメッセージにする(big endian)
- * - テキスト: サーバーからの通知(welcome / join / leave)の JSON
+ * - テキスト: サーバーからの通知(welcome / join / leave)の JSON。welcome と join には表示名
+ *   (`names` は ID から表示名、`name` は入った人の表示名)を付ける
  *
  * Hibernation を使うので、メモリ上の状態は静かな間に消えてよいものだけにする。
  */
@@ -28,7 +32,7 @@ export class Room extends DurableObject<Env> {
   private flushTimer: ReturnType<typeof setTimeout> | undefined;
   private rates = new Map<WebSocket, { windowStart: number; count: number }>();
 
-  override async fetch(): Promise<Response> {
+  override async fetch(request: Request): Promise<Response> {
     const sockets = this.openSockets();
     if (sockets.length >= MAX_PEERS) {
       return new Response('room is full', { status: 409 });
@@ -36,13 +40,19 @@ export class Room extends DurableObject<Env> {
 
     const [client, server] = Object.values(new WebSocketPair()) as [WebSocket, WebSocket];
     const peerId = this.nextPeerId(sockets);
+    const name = decodeName(request.headers.get(DISPLAY_NAME_HEADER));
     this.ctx.acceptWebSocket(server);
-    server.serializeAttachment({ peerId } satisfies Attachment);
+    server.serializeAttachment({ peerId, name } satisfies Attachment);
 
     server.send(
-      JSON.stringify({ type: 'welcome', id: peerId, peers: sockets.map((ws) => peerOf(ws)) }),
+      JSON.stringify({
+        type: 'welcome',
+        id: peerId,
+        peers: sockets.map((ws) => peerOf(ws)),
+        names: Object.fromEntries(sockets.map((ws) => [peerOf(ws), nameOf(ws)])),
+      }),
     );
-    this.broadcastText({ type: 'join', id: peerId }, server);
+    this.broadcastText({ type: 'join', id: peerId, name }, server);
     return new Response(null, { status: 101, webSocket: client });
   }
 
@@ -131,6 +141,20 @@ export class Room extends DurableObject<Env> {
 
 function peerOf(ws: WebSocket): number {
   return (ws.deserializeAttachment() as Attachment).peerId;
+}
+
+function nameOf(ws: WebSocket): string {
+  return (ws.deserializeAttachment() as Partial<Attachment>).name ?? '';
+}
+
+/** 符号化された表示名を戻す。無いか壊れていれば空にする */
+function decodeName(header: string | null): string {
+  if (!header) return '';
+  try {
+    return decodeURIComponent(header);
+  } catch {
+    return '';
+  }
 }
 
 export function encodeFrames(frames: Frame[]): ArrayBuffer {

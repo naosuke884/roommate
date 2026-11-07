@@ -12,6 +12,7 @@ interface Peer {
   ws: WebSocket;
   id: number;
   peers: number[];
+  names: Record<string, string>;
   texts: unknown[];
   frames: { from: number; data: number[] }[];
   closed?: number;
@@ -42,10 +43,16 @@ async function connect(key: string, token?: string): Promise<Peer> {
     const peer = { ws, texts: [], frames: [] } as unknown as Peer;
     ws.addEventListener('message', (event) => {
       if (typeof event.data === 'string') {
-        const message = JSON.parse(event.data) as { type: string; id: number; peers: number[] };
+        const message = JSON.parse(event.data) as {
+          type: string;
+          id: number;
+          peers: number[];
+          names: Record<string, string>;
+        };
         if (message.type === 'welcome') {
           peer.id = message.id;
           peer.peers = message.peers;
+          peer.names = message.names;
           resolve(peer);
         } else {
           peer.texts.push(message);
@@ -111,11 +118,35 @@ describe('GET /rooms/:key', () => {
   it('人の出入りを他の人に知らせる', async () => {
     const a = await connect('presence');
     const b = await connect('presence');
-    expect(a.texts).toContainEqual({ type: 'join', id: b.id });
+    expect(a.texts).toContainEqual({
+      type: 'join',
+      id: b.id,
+      name: expect.stringMatching(/^名無し#/),
+    });
 
     b.ws.close(1000, 'bye');
     await waitFor(() => a.texts.length >= 2);
     expect(a.texts).toContainEqual({ type: 'leave', id: b.id });
+  });
+
+  it('入った人と、先にいた人の表示名をサーバーが付けて知らせる', async () => {
+    const named = await issuePlayer();
+    const res = await request('/players/me/name', {
+      method: 'PUT',
+      headers: { Authorization: `Bearer ${named.token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: 'あおい' }),
+    });
+    expect(res.status).toBe(200);
+    const a = await connect('names', named.token);
+    const b = await connect('names');
+    const prefix = named.playerId.slice(0, 4);
+    expect(b.names).toEqual({ [a.id]: `あおい#${prefix}` });
+    await waitFor(() => a.texts.length > 0);
+    expect(a.texts).toContainEqual({
+      type: 'join',
+      id: b.id,
+      name: expect.stringMatching(/^名無し#/),
+    });
   });
 
   it('大きすぎるメッセージを送った接続は閉じる', async () => {
