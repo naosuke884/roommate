@@ -1,8 +1,10 @@
 ---
 import { games, playUrl, type Game } from '@roommate/catalog';
+import { Image } from 'astro:assets';
 import Ranking from '../../components/Ranking.tsx';
 import { API_ORIGIN } from '../../config.ts';
 import Base from '../../layouts/Base.astro';
+import { gameImages } from '../../games.ts';
 
 export function getStaticPaths() {
   return games.map((game) => ({ params: { slug: game.slug }, props: { game } }));
@@ -13,12 +15,23 @@ interface Props {
 }
 
 const { game } = Astro.props;
+const image = gameImages[game.slug];
 ---
 
 <Base title={game.title} description={game.description}>
   <div class="hero">
     <div class="thumb">
-      <img src="/logo.svg" alt="" width="72" height="72" />
+      {image ? (
+        <Image
+          src={image}
+          alt={`${game.title} のゲーム画面`}
+          widths={[640, 960, 1280]}
+          sizes="(min-width: 40rem) 20rem, calc(100vw - 2.5rem)"
+          loading="eager"
+        />
+      ) : (
+        <img src="/logo.svg" alt="" width="72" height="72" />
+      )}
     </div>
     <div class="intro">
       <h1>{game.title}</h1>
@@ -54,9 +67,16 @@ const { game } = Astro.props;
   .thumb {
     display: grid;
     place-items: center;
+    overflow: hidden;
     aspect-ratio: 16 / 9;
     border-radius: var(--radius);
     background: var(--soft);
+  }
+
+  .thumb img:not([src$='.svg']) {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
   }
 
   .intro {
