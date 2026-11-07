@@ -1,0 +1,38 @@
+# Dependabot の minor / patch の更新 PR に auto-merge (`gh pr merge --auto`) を付け、必須のチェックが通ったら自動でマージさせる。
+# major は破壊的変更を個別に確認するため対象外 (.github/dependabot.yml でも major は別の PR に分けている)。
+# マージ方法を rebase にするのは、Dependabot のコミットをそのまま main に載せ、コミットメッセージの検査 (commitlint など) が
+# Dependabot のコミットを見分ける手がかり (本文の `Signed-off-by: dependabot[bot]`) を保つため。squash だと本文が PR の説明に置き換わりうる。
+#
+# 動かすにはリポジトリの Settings で
+#   - General > Pull Requests: Allow auto-merge と Allow rebase merging を有効にする
+#   - Branches (または Rulesets): main に CI の job を必須のステータスチェックとして設定する
+# 必須のチェックが無いと auto-merge は CI を待たずにすぐマージしてしまう。
+name: Dependabot auto-merge
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  auto-merge:
+    name: enable auto-merge
+    # フォークや人の PR では動かさない
+    if: github.event.pull_request.user.login == 'dependabot[bot]' && github.repository == 'naosuke884/roommate'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - id: metadata
+        uses: dependabot/fetch-metadata@25dd0e34f4fe68f24cc83900b1fe3fe149efef98 # v3.1.0
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - if: steps.metadata.outputs.update-type != 'version-update:semver-major'
+        env:
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh pr merge --auto --rebase "$PR_URL"
