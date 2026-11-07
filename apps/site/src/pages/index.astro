@@ -78,12 +78,14 @@ import { gameImages } from '../games.ts';
     display: grid;
     grid-template-rows: auto 1fr;
     overflow: hidden;
-    border: 1px solid var(--line);
+    /* 枠は指したときとキーボードで選んだときだけ出す。幅は取っておき、出ても中身がずれないようにする */
+    border: 1px solid transparent;
     border-radius: var(--radius);
     background: var(--surface);
   }
 
-  .game:has(h3 a:hover) {
+  .game:has(h3 a:hover),
+  .game:has(h3 a:focus-visible) {
     border-color: var(--overlap);
   }
 
