@@ -88,7 +88,13 @@ import { gameImages } from '../games.ts';
     background: var(--surface);
   }
 
-  .game:has(h3 a:hover),
+  /* スマホでは触れると hover が残るので、マウスなど指せる端末だけで出す */
+  @media (hover: hover) {
+    .game:has(h3 a:hover) {
+      border-color: var(--overlap);
+    }
+  }
+
   .game:has(h3 a:focus-visible) {
     border-color: var(--overlap);
   }
@@ -123,6 +129,8 @@ import { gameImages } from '../games.ts';
   /* カードのどこを押してもゲームページへ移る */
   h3 a {
     text-decoration: none;
+    /* カード全体がリンクなので、触れたときにブラウザがカードを塗らないようにする */
+    -webkit-tap-highlight-color: transparent;
   }
 
   h3 a::after {
