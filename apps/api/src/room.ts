@@ -6,6 +6,10 @@ export const MAX_MESSAGES_PER_SECOND = 30;
 export const FLUSH_INTERVAL_MS = 100;
 /** 部屋に入る人の表示名(「名前#1a2b」)。`rooms.ts` が URL 符号化して付ける */
 export const DISPLAY_NAME_HEADER = 'X-Roommate-Display-Name';
+/** 部屋の名前(`<キー>#<番号>`)。`rooms.ts` が URL 符号化して付ける。人数を書くときに使う */
+export const ROOM_NAME_HEADER = 'X-Roommate-Room';
+/** 人がいる間、人数を書き直す間隔。出入りが無くても行が古くならないようにする */
+export const PRESENCE_REFRESH_MS = 60_000;
 
 interface Attachment {
   peerId: number;
@@ -38,6 +42,9 @@ export class Room extends DurableObject<Env> {
       return new Response('room is full', { status: 409 });
     }
 
+    const room = decodeName(request.headers.get(ROOM_NAME_HEADER));
+    if (room) this.ctx.storage.kv.put('room', room);
+
     const [client, server] = Object.values(new WebSocketPair()) as [WebSocket, WebSocket];
     const peerId = this.nextPeerId(sockets);
     const name = decodeName(request.headers.get(DISPLAY_NAME_HEADER));
@@ -53,6 +60,7 @@ export class Room extends DurableObject<Env> {
       }),
     );
     this.broadcastText({ type: 'join', id: peerId, name }, server);
+    await this.reportPresence();
     return new Response(null, { status: 101, webSocket: client });
   }
 
@@ -72,8 +80,8 @@ export class Room extends DurableObject<Env> {
     this.flushTimer ??= setTimeout(() => this.flush(), FLUSH_INTERVAL_MS);
   }
 
-  override webSocketClose(ws: WebSocket, code: number, reason: string): void {
-    this.leave(ws);
+  override async webSocketClose(ws: WebSocket, code: number, reason: string): Promise<void> {
+    await this.leave(ws);
     try {
       ws.close(code, reason);
     } catch {
@@ -81,13 +89,45 @@ export class Room extends DurableObject<Env> {
     }
   }
 
-  override webSocketError(ws: WebSocket): void {
-    this.leave(ws);
+  override async webSocketError(ws: WebSocket): Promise<void> {
+    await this.leave(ws);
   }
 
-  private leave(ws: WebSocket) {
+  override async alarm(): Promise<void> {
+    await this.reportPresence();
+  }
+
+  private async leave(ws: WebSocket) {
     this.rates.delete(ws);
     this.broadcastText({ type: 'leave', id: peerOf(ws) }, ws);
+    await this.reportPresence(ws);
+  }
+
+  /**
+   * 今つながっている人数を D1 に書く。誰もいなければ行を消す。
+   * 人がいる間はアラームで書き直し、部屋が止まっても古い行として数えられないようにする。
+   * 書けなくても部屋は動かし続ける
+   */
+  private async reportPresence(leaving?: WebSocket) {
+    const room = this.ctx.storage.kv.get<string>('room');
+    if (!room) return;
+    const players = this.openSockets().filter((ws) => ws !== leaving).length;
+    try {
+      if (players === 0) {
+        await this.env.DB.prepare('DELETE FROM presence WHERE room = ?').bind(room).run();
+        await this.ctx.storage.deleteAlarm();
+        return;
+      }
+      await this.env.DB.prepare(
+        `INSERT INTO presence (room, game, players, updated_at) VALUES (?1, ?2, ?3, ?4)
+         ON CONFLICT (room) DO UPDATE SET players = ?3, updated_at = ?4`,
+      )
+        .bind(room, gameOfRoom(room), players, Date.now())
+        .run();
+    } catch (error) {
+      console.error('presence を書けなかった', error);
+    }
+    await this.ctx.storage.setAlarm(Date.now() + PRESENCE_REFRESH_MS);
   }
 
   private flush() {
@@ -145,6 +185,11 @@ function peerOf(ws: WebSocket): number {
 
 function nameOf(ws: WebSocket): string {
   return (ws.deserializeAttachment() as Partial<Attachment>).name ?? '';
+}
+
+/** 部屋の名前からゲームの slug を取る。キーは `<slug>:...` の形にする約束 */
+export function gameOfRoom(room: string): string {
+  return room.split(/[:#]/, 1)[0] ?? '';
 }
 
 /** 符号化された表示名を戻す。無いか壊れていれば空にする */

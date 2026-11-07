@@ -2,7 +2,7 @@ import { Hono } from 'hono';
 import { verificationSecrets, verifyPlayerToken } from './auth.ts';
 import { displayName } from './names.ts';
 import { isAllowedOrigin } from './origins.ts';
-import { DISPLAY_NAME_HEADER } from './room.ts';
+import { DISPLAY_NAME_HEADER, ROOM_NAME_HEADER } from './room.ts';
 
 // 部屋が埋まったら次の部屋に入れる。これを超えたら断る
 const MAX_SHARDS = 50;
@@ -10,7 +10,8 @@ const ROOM_KEY = /^[A-Za-z0-9._:-]{1,128}$/;
 
 export const rooms = new Hono<{ Bindings: Env }>();
 
-// ブラウザの WebSocket はヘッダーを付けられないので、トークンは query で受け取る
+// ブラウザの WebSocket はヘッダーを付けられないので、トークンは query で受け取る。
+// キーは `<ゲームの slug>:...` の形にする。今遊んでいる人数を、ゲームごとに数えるため
 rooms.get('/rooms/:key', async (c) => {
   if (c.req.header('Upgrade')?.toLowerCase() !== 'websocket') {
     return c.json({ error: 'websocket_required' }, 426);
@@ -39,8 +40,11 @@ rooms.get('/rooms/:key', async (c) => {
   );
 
   for (let shard = 0; shard < MAX_SHARDS; shard++) {
-    const room = c.env.ROOM.getByName(`${key}#${shard}`);
-    const res = await room.fetch(new Request(forwarded));
+    const name = `${key}#${shard}`;
+    const room = c.env.ROOM.getByName(name);
+    const request = new Request(forwarded);
+    request.headers.set(ROOM_NAME_HEADER, encodeURIComponent(name));
+    const res = await room.fetch(request);
     if (res.status !== 409) {
       return res;
     }

@@ -2,7 +2,7 @@ import { playOrigin } from '@roommate/catalog';
 import { describe, expect, it } from 'vitest';
 import { env } from 'cloudflare:workers';
 import { issuePlayerToken } from '../src/auth.ts';
-import { MAX_MESSAGES_PER_SECOND, MAX_MESSAGE_BYTES, MAX_PEERS } from '../src/room.ts';
+import { MAX_MESSAGES_PER_SECOND, MAX_MESSAGE_BYTES, MAX_PEERS, gameOfRoom } from '../src/room.ts';
 import { issuePlayer, request } from './helpers.ts';
 
 // ゲームは配信用の origin から繋ぐ
@@ -209,5 +209,61 @@ describe('GET /rooms/:key', () => {
       headers: { Upgrade: 'websocket', Origin: ORIGIN },
     });
     expect(res.status).toBe(400);
+  });
+});
+
+describe('GET /games/:slug/presence', () => {
+  async function playing() {
+    const res = await request('/games/grapnl/presence');
+    expect(res.status).toBe(200);
+    return (await res.json<{ playing: number }>()).playing;
+  }
+
+  /** 出た人の分は部屋が後から書くので、期待する人数になるまで待つ */
+  async function playingBecomes(expected: number) {
+    let now = await playing();
+    for (let i = 0; i < 100 && now !== expected; i++) {
+      await wait(20);
+      now = await playing();
+    }
+    return now;
+  }
+
+  it('そのゲームの部屋につながっている人数を足し、出た人は引く', async () => {
+    const before = await playing();
+    const a = await connect('grapnl:presence:1');
+    const b = await connect('grapnl:presence:1');
+    const c = await connect('grapnl:presence:2');
+    // ほかのゲームの部屋は数えない
+    const other = await connect('other-game:presence:1');
+    expect(await playing()).toBe(before + 3);
+
+    b.ws.close();
+    expect(await playingBecomes(before + 2)).toBe(before + 2);
+
+    for (const peer of [a, c, other]) peer.ws.close();
+    expect(await playingBecomes(before)).toBe(before);
+  });
+
+  it('しばらく書き直されていない部屋は数えない', async () => {
+    const before = await playing();
+    await env.DB.prepare(
+      'INSERT INTO presence (room, game, players, updated_at) VALUES (?, ?, ?, ?)',
+    )
+      .bind('grapnl:stale#0', 'grapnl', 5, Date.now() - 60 * 60 * 1000)
+      .run();
+    expect(await playing()).toBe(before);
+  });
+
+  it('無いゲームには 404 を返す', async () => {
+    const res = await request('/games/missing/presence');
+    expect(res.status).toBe(404);
+  });
+});
+
+describe('gameOfRoom', () => {
+  it('部屋の名前の「:」より前をゲームの slug とする', () => {
+    expect(gameOfRoom('grapnl:20000:3#0')).toBe('grapnl');
+    expect(gameOfRoom('plain#2')).toBe('plain');
   });
 });

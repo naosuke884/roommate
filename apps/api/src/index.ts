@@ -3,6 +3,7 @@ import { type Context, Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { isAllowedOrigin } from './origins.ts';
 import { players } from './players.ts';
+import { presence } from './presence.ts';
 import { rooms } from './rooms.ts';
 import { scores } from './scores.ts';
 
@@ -23,6 +24,7 @@ app.get('/health', (c) => c.json({ ok: true }));
 app.get('/games', (c) => c.json({ games }));
 
 app.route('/players', players);
+app.route('/', presence);
 app.route('/', scores);
 app.route('/', rooms);
 
