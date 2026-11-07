@@ -76,6 +76,7 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           JWT_SECRET: ${{ secrets.JWT_SECRET }}
+          JWT_SECRET_PREVIOUS: ${{ secrets.JWT_SECRET_PREVIOUS }}
       # デプロイできても本番が応答していないことがある。反映の遅れはスクリプト側で試し直す
       - name: 本番が応答するか
         run: pnpm --filter @roommate/catalog check-production

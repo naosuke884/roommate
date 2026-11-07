@@ -14,7 +14,12 @@
     "deploy": {
       "dependsOn": ["build"],
       "cache": false,
-      "passThroughEnv": ["CLOUDFLARE_API_TOKEN", "CLOUDFLARE_ACCOUNT_ID", "JWT_SECRET"]
+      "passThroughEnv": [
+        "CLOUDFLARE_API_TOKEN",
+        "CLOUDFLARE_ACCOUNT_ID",
+        "JWT_SECRET",
+        "JWT_SECRET_PREVIOUS"
+      ]
     },
     "dev": {
       "cache": false,

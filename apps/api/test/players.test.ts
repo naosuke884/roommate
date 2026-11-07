@@ -2,7 +2,13 @@ import { siteOrigin } from '@roommate/catalog';
 import { env } from 'cloudflare:workers';
 import { sign } from 'hono/jwt';
 import { describe, expect, it } from 'vitest';
-import { REFRESH_GRACE_SECONDS, TOKEN_TTL_SECONDS, issuePlayerToken } from '../src/auth.ts';
+import {
+  REFRESH_GRACE_SECONDS,
+  TOKEN_TTL_SECONDS,
+  issuePlayerToken,
+  verificationSecrets,
+  verifyPlayerToken,
+} from '../src/auth.ts';
 import { type TokenBody, issuePlayer as issue, request, today } from './helpers.ts';
 
 describe('POST /players', () => {
@@ -187,6 +193,45 @@ describe('DELETE /players/me', () => {
   it('トークンが無ければ 401 を返す', async () => {
     const res = await request('/players/me', { method: 'DELETE' });
     expect(res.status).toBe(401);
+  });
+});
+
+describe('前の鍵', () => {
+  // vitest.config.ts で JWT_SECRET_PREVIOUS を設定している
+  const previous = () => env.JWT_SECRET_PREVIOUS!;
+
+  it('前の鍵で署名したトークンも、ふつうの API で通る', async () => {
+    const { playerId } = await issue();
+    const { token } = await issuePlayerToken(playerId, previous());
+    const res = await request('/players/me', { token });
+    expect(res.status).toBe(200);
+  });
+
+  it('前の鍵のトークンで発行し直すと、同じ ID で今の鍵のトークンを返す', async () => {
+    const { playerId } = await issue();
+    const issuedAt = Math.floor(Date.now() / 1000) - TOKEN_TTL_SECONDS - 90 * 86400;
+    const { token } = await issuePlayerToken(playerId, previous(), issuedAt);
+    const res = await request('/players/me/token', { method: 'POST', token });
+    expect(res.status).toBe(200);
+    const body = await res.json<TokenBody>();
+    expect(body.playerId).toBe(playerId);
+    expect(await verifyPlayerToken(body.token, [env.JWT_SECRET])).toBe(playerId);
+  });
+
+  it('前の鍵のトークンで、自分のデータを消せる', async () => {
+    const { playerId } = await issue();
+    const { token } = await issuePlayerToken(playerId, previous());
+    const res = await request('/players/me', { method: 'DELETE', token });
+    expect(res.status).toBe(204);
+  });
+
+  it('前の鍵が空なら、今の鍵だけで確かめる', () => {
+    expect(verificationSecrets({ JWT_SECRET: 'now', JWT_SECRET_PREVIOUS: '' })).toEqual(['now']);
+    expect(verificationSecrets({ JWT_SECRET: 'now' })).toEqual(['now']);
+    expect(verificationSecrets({ JWT_SECRET: 'now', JWT_SECRET_PREVIOUS: 'old' })).toEqual([
+      'now',
+      'old',
+    ]);
   });
 });
 

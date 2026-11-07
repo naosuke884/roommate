@@ -27,37 +27,52 @@ export async function issuePlayerToken(
   return { playerId, token, expiresAt };
 }
 
-/** 署名と有効期限を確かめ、プレイヤー ID を返す。不正なら undefined */
+/**
+ * トークンを確かめる鍵。今の鍵を先に試し、鍵を替えたあとしばらくは前の鍵でも確かめる。
+ * 前の鍵が空なら使わない
+ */
+export function verificationSecrets(env: { JWT_SECRET: string; JWT_SECRET_PREVIOUS?: string }) {
+  return env.JWT_SECRET_PREVIOUS ? [env.JWT_SECRET, env.JWT_SECRET_PREVIOUS] : [env.JWT_SECRET];
+}
+
+/** 署名と有効期限を確かめ、プレイヤー ID を返す。どの鍵でも通らなければ undefined */
 export async function verifyPlayerToken(
   token: string,
-  secret: string,
+  secrets: readonly string[],
 ): Promise<string | undefined> {
-  try {
-    const payload = await verify(token, secret, { alg: 'HS256', iss: ISSUER });
-    return typeof payload.sub === 'string' ? payload.sub : undefined;
-  } catch {
-    return undefined;
+  for (const secret of secrets) {
+    try {
+      const payload = await verify(token, secret, { alg: 'HS256', iss: ISSUER });
+      return typeof payload.sub === 'string' ? payload.sub : undefined;
+    } catch {
+      // 次の鍵で確かめる
+    }
   }
+  return undefined;
 }
 
 /**
  * 発行し直すためのトークンを確かめ、プレイヤー ID を返す。期限切れでも
- * `REFRESH_GRACE_SECONDS` の間は受け付ける。署名が違うものは受け付けない
+ * `REFRESH_GRACE_SECONDS` の間は受け付ける。どの鍵の署名とも合わないものは受け付けない
  */
 export async function verifyRefreshToken(
   token: string,
-  secret: string,
+  secrets: readonly string[],
   now = Math.floor(Date.now() / 1000),
 ): Promise<string | undefined> {
-  try {
-    const payload = await verify(token, secret, { alg: 'HS256', iss: ISSUER, exp: false });
+  for (const secret of secrets) {
+    let payload;
+    try {
+      payload = await verify(token, secret, { alg: 'HS256', iss: ISSUER, exp: false });
+    } catch {
+      continue;
+    }
     if (typeof payload.exp !== 'number' || payload.exp + REFRESH_GRACE_SECONDS <= now) {
       return undefined;
     }
     return typeof payload.sub === 'string' ? payload.sub : undefined;
-  } catch {
-    return undefined;
   }
+  return undefined;
 }
 
 function bearer(header: string | undefined): string | undefined {
@@ -70,7 +85,7 @@ export const requirePlayer = createMiddleware<{
   Variables: { playerId: string };
 }>(async (c, next) => {
   const token = bearer(c.req.header('Authorization'));
-  const playerId = token && (await verifyPlayerToken(token, c.env.JWT_SECRET));
+  const playerId = token && (await verifyPlayerToken(token, verificationSecrets(c.env)));
   if (!playerId) {
     return c.json({ error: 'unauthorized' }, 401);
   }
@@ -84,7 +99,7 @@ export const requireRefreshablePlayer = createMiddleware<{
   Variables: { playerId: string };
 }>(async (c, next) => {
   const token = bearer(c.req.header('Authorization'));
-  const playerId = token && (await verifyRefreshToken(token, c.env.JWT_SECRET));
+  const playerId = token && (await verifyRefreshToken(token, verificationSecrets(c.env)));
   if (!playerId) {
     return c.json({ error: 'unauthorized' }, 401);
   }

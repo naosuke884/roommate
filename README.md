@@ -16,11 +16,12 @@
 
 Environment `production` に置く。
 
-| 名前                    | 内容                                                                     |
-| ----------------------- | ------------------------------------------------------------------------ |
-| `CLOUDFLARE_API_TOKEN`  | デプロイ用の Cloudflare API トークン                                     |
-| `CLOUDFLARE_ACCOUNT_ID` | Cloudflare のアカウント ID                                               |
-| `JWT_SECRET`            | 匿名 ID のトークンを署名する鍵。デプロイ時に API の Worker secret になる |
+| 名前                    | 内容                                                                                        |
+| ----------------------- | ------------------------------------------------------------------------------------------- |
+| `CLOUDFLARE_API_TOKEN`  | デプロイ用の Cloudflare API トークン                                                        |
+| `CLOUDFLARE_ACCOUNT_ID` | Cloudflare のアカウント ID                                                                  |
+| `JWT_SECRET`            | 匿名 ID のトークンを署名する鍵。デプロイ時に API の Worker secret になる                    |
+| `JWT_SECRET_PREVIOUS`   | 鍵を替えたあとしばらく置く、前の鍵。ふだんは置かない。[署名の鍵を替える](#署名の鍵を替える) |
 
 ### デプロイ用トークンの権限
 
@@ -104,6 +105,28 @@ pnpm --filter @roommate/api exec wrangler d1 time-travel restore roommate --time
 ```sh
 pnpm --filter @roommate/api exec wrangler d1 time-travel restore roommate --bookmark=<previous-bookmark>
 ```
+
+## 署名の鍵を替える
+
+API は `JWT_SECRET` で匿名 ID のトークンに署名する。替えると、前の鍵で署名したトークンが通らなくなり、遊んだ人は新しい ID になる。前の鍵を `JWT_SECRET_PREVIOUS` に置いておくと、その間は前の鍵のトークンも通り、発行し直すときに今の鍵のトークンに替わる。
+
+1. 新しい鍵を作る
+
+   ```sh
+   openssl rand -base64 48
+   ```
+
+2. GitHub の Environment `production` で、今の鍵を `JWT_SECRET_PREVIOUS` に置き、`JWT_SECRET` を新しい鍵にする
+   - GitHub の secret は読み出せないので、今の鍵の控えが無ければ前の鍵は置けない。その場合は全員が新しい ID になる
+3. main の CI の deploy job を実行し直す。API の Worker に両方の鍵が入る
+4. 前の鍵は約 395 日残す。トークンの期限 30 日と、期限切れから発行し直せる猶予 1 年を足した長さで、それより長く開いていない人は前の鍵を外すと新しい ID になる
+5. 外すときは、GitHub の `JWT_SECRET_PREVIOUS` を消し、Worker からも消す。deploy は書いていない secret を消さないため
+
+   ```sh
+   pnpm --filter @roommate/api exec wrangler secret delete JWT_SECRET_PREVIOUS
+   ```
+
+鍵が漏れて替えるときは、`JWT_SECRET_PREVIOUS` を置かない。前の鍵が通るあいだは、漏れた鍵で作ったトークンも通るため。すでに置いてあれば上の 5 で消す。
 
 ## スコアを隠す・消す
 

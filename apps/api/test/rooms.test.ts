@@ -1,5 +1,7 @@
 import { playOrigin } from '@roommate/catalog';
 import { describe, expect, it } from 'vitest';
+import { env } from 'cloudflare:workers';
+import { issuePlayerToken } from '../src/auth.ts';
 import { MAX_MESSAGES_PER_SECOND, MAX_MESSAGE_BYTES, MAX_PEERS } from '../src/room.ts';
 import { issuePlayer, request } from './helpers.ts';
 
@@ -148,6 +150,13 @@ describe('GET /rooms/:key', () => {
   it('トークンが無ければ 401 を返す', async () => {
     const res = await request('/rooms/auth', { headers: { Upgrade: 'websocket', Origin: ORIGIN } });
     expect(res.status).toBe(401);
+  });
+
+  it('前の鍵で署名したトークンでも入れる', async () => {
+    const { playerId } = await issuePlayer();
+    const { token } = await issuePlayerToken(playerId, env.JWT_SECRET_PREVIOUS!);
+    const peer = await connect('previous-key', token);
+    peer.ws.close();
   });
 
   it('許可していない origin からは 403 を返す', async () => {

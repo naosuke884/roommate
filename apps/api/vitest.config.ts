@@ -8,7 +8,11 @@ export default defineConfig(async () => {
       cloudflareTest({
         wrangler: { configPath: './wrangler.jsonc' },
         miniflare: {
-          bindings: { JWT_SECRET: 'test-secret', TEST_MIGRATIONS: migrations },
+          bindings: {
+            JWT_SECRET: 'test-secret',
+            JWT_SECRET_PREVIOUS: 'previous-secret',
+            TEST_MIGRATIONS: migrations,
+          },
         },
       }),
     ],

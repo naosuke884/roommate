@@ -13,7 +13,13 @@ wrangler d1 migrations apply DB --remote
 
 secrets_file=$(mktemp)
 trap 'rm -f "$secrets_file"' EXIT
-node -e 'process.stdout.write(JSON.stringify({ JWT_SECRET: process.env.JWT_SECRET }))' >"$secrets_file"
+# 前の鍵は、鍵を替えてしばらくの間だけ設定する。未設定ならファイルに入れない。
+# --secrets-file は書かなかった secret を消さないので、外すときは `wrangler secret delete` で消す
+node -e '
+  const secrets = { JWT_SECRET: process.env.JWT_SECRET };
+  if (process.env.JWT_SECRET_PREVIOUS) secrets.JWT_SECRET_PREVIOUS = process.env.JWT_SECRET_PREVIOUS;
+  process.stdout.write(JSON.stringify(secrets));
+' >"$secrets_file"
 wrangler deploy --secrets-file "$secrets_file"
 
 # Worker の手前で、IP ごとに極端な連打を弾く

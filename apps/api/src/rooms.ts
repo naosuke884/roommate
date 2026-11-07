@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import { verifyPlayerToken } from './auth.ts';
+import { verificationSecrets, verifyPlayerToken } from './auth.ts';
 import { isAllowedOrigin } from './origins.ts';
 
 // 部屋が埋まったら次の部屋に入れる。これを超えたら断る
@@ -17,7 +17,7 @@ rooms.get('/rooms/:key', async (c) => {
     return c.json({ error: 'forbidden_origin' }, 403);
   }
   const token = c.req.query('token');
-  if (!token || !(await verifyPlayerToken(token, c.env.JWT_SECRET))) {
+  if (!token || !(await verifyPlayerToken(token, verificationSecrets(c.env)))) {
     return c.json({ error: 'unauthorized' }, 401);
   }
   const key = c.req.param('key');
