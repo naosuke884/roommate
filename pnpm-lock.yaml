@@ -246,6 +246,9 @@ importers:
       '@astrojs/react':
         specifier: ^7.1.2
         version: 7.1.2(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(esbuild@0.28.2)(jiti@2.7.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(yaml@2.9.1)
+      '@fontsource/zen-maru-gothic':
+        specifier: ^5.3.1
+        version: 5.3.1
       '@roommate/catalog':
         specifier: workspace:*
         version: link:../../packages/catalog
@@ -876,6 +879,9 @@ packages:
   '@eslint/plugin-kit@0.7.3':
     resolution: {integrity: sha512-IkO+/KEUvwbVpiURZg+P7zF74z5Jxe0UgJxVni+RtoHQ6IZieXaO02kmadomap/q+l6bc/jdPGGqTjhuZnuz1Q==}
     engines: {node: ^20.19.0 || ^22.13.0 || >=24}
+
+  '@fontsource/zen-maru-gothic@5.3.1':
+    resolution: {integrity: sha512-DtDKg44WTu44VuUWIJq8oAdCMHkkKrlpUaYHPbBQQkr8eZUNUjdWtzTJM3QIVlYYqdUPZN0Oy2a20EbxPJnF/g==}
 
   '@humanfs/core@0.19.2':
     resolution: {integrity: sha512-UhXNm+CFMWcbChXywFwkmhqjs3PRCmcSa/hfBgLIb7oQ5HNb1wS0icWsGtSAUNgefHeI+eBrA8I1fxmbHsGdvA==}
@@ -3577,6 +3583,8 @@ snapshots:
     dependencies:
       '@eslint/core': 1.2.1
       levn: 0.4.1
+
+  '@fontsource/zen-maru-gothic@5.3.1': {}
 
   '@humanfs/core@0.19.2':
     dependencies:

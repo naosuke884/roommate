@@ -1,4 +1,6 @@
 ---
+import '@fontsource/zen-maru-gothic/latin-700.css';
+
 interface Props {
   title?: string;
   /** 検索結果やリンクの共有で出る説明。省くとサイト全体の説明 */
@@ -33,7 +35,8 @@ const canonical = new URL(Astro.url.pathname, Astro.site);
   <body>
     <header>
       <a href="/" class="brand">
-        roommate
+        <img src="/logo.svg" alt="" width="32" height="32" />
+        <span>roommate</span>
       </a>
     </header>
     <main>
@@ -43,20 +46,33 @@ const canonical = new URL(Astro.url.pathname, Astro.site);
 </html>
 
 <style is:global>
+  /* 配色は HAY-134 で決めたもの。オレンジと黄は面と図形に使い、文字には使わない */
   :root {
     color-scheme: light dark;
-    --bg: #fafaf7;
-    --fg: #1d1d1b;
-    --muted: #6b6b66;
-    --line: #e2e2dc;
+    --bg: #fffaf0;
+    --fg: #3a2a1e;
+    --muted: #7a6656;
+    --line: #efe3cf;
+    --surface: #ffffff;
+    /* ゲームの画像の代わりの面。シンボルの黄の丸が埋もれない薄い色 */
+    --soft: #fff0d2;
+    --apricot: #ff9852;
+    --butter: #ffd36b;
+    --overlap: #f5b04a;
+    /* オレンジと黄の面に載せる文字。どちらのテーマでもこげ茶 */
+    --on-accent: #3a2a1e;
+    --font-brand: 'Zen Maru Gothic', system-ui, sans-serif;
+    --radius: 1.125rem;
   }
 
   @media (prefers-color-scheme: dark) {
     :root {
-      --bg: #161614;
-      --fg: #ecece6;
-      --muted: #9a9a93;
-      --line: #2e2e2a;
+      --bg: #272019;
+      --fg: #fff1dc;
+      --muted: #bca88f;
+      --line: #3d3328;
+      --surface: #30281f;
+      --soft: #3b3024;
     }
   }
 
@@ -65,19 +81,77 @@ const canonical = new URL(Astro.url.pathname, Astro.site);
     background: var(--bg);
     color: var(--fg);
     font-family: system-ui, sans-serif;
-    line-height: 1.6;
+    line-height: 1.7;
   }
 
   header,
   main {
-    max-width: 48rem;
+    max-width: 64rem;
     margin: 0 auto;
-    padding: 1.5rem 1rem;
+    padding: 1rem 1.25rem;
+  }
+
+  main {
+    padding-bottom: 3rem;
+  }
+
+  @media (min-width: 40rem) {
+    header,
+    main {
+      padding-left: 2.5rem;
+      padding-right: 2.5rem;
+    }
+  }
+
+  a {
+    color: inherit;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--fg);
+    outline-offset: 2px;
   }
 
   .brand {
-    color: inherit;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    text-decoration: none;
+  }
+
+  .brand span {
+    font-family: var(--font-brand);
+    font-size: 1.25rem;
+    font-weight: 700;
+    line-height: 1;
+  }
+
+  /* 遊ぶ・戻るなど、ページの主な操作 */
+  .button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0.625rem 1.75rem;
+    border-radius: 999px;
+    background: var(--apricot);
+    box-shadow: 0 2px 0 var(--overlap);
+    color: var(--on-accent);
     font-weight: 700;
     text-decoration: none;
+    white-space: nowrap;
+  }
+
+  .button:hover {
+    filter: brightness(1.05);
+  }
+
+  .button:active {
+    box-shadow: none;
+    transform: translateY(2px);
+  }
+
+  .button-small {
+    padding: 0.375rem 1.125rem;
+    font-size: 0.875rem;
   }
 </style>
