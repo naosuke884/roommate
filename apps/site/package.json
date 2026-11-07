@@ -6,6 +6,7 @@
     "dev": "astro dev",
     "build": "astro build",
     "typecheck": "astro check",
+    "test": "vitest run",
     "deploy": "wrangler deploy"
   },
   "dependencies": {
@@ -19,9 +20,13 @@
   },
   "devDependencies": {
     "@astrojs/check": "^0.9.12",
+    "@testing-library/dom": "^10.4.2",
+    "@testing-library/react": "^16.3.3",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
+    "happy-dom": "^21.0.4",
     "typescript": "~6.0.3",
+    "vitest": "^5.0.5",
     "wrangler": "^4.156.0"
   }
 }
