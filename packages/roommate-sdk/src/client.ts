@@ -327,13 +327,20 @@ export class Client {
     });
   }
 
+  /**
+   * 全期間の自己ベストを API の値に合わせる。手元より低くても合わせるので、
+   * 運営が隠したスコアや受け付けられなかったスコアで上がった分は下がる
+   */
   private async loadBest(player: StoredPlayer) {
     const res = await this.options.fetch(`${this.gamePath()}/scores/me`, {
       headers: { Authorization: `Bearer ${player.token}` },
     });
     if (!res.ok) return;
     const { best } = (await res.json()) as { best: number | null };
-    if (best !== null) this.raiseBest(best);
+    // まだ送れていないスコアは API に無いので、応答が届いた時点のものを含める
+    const scores = this.pending().map((entry) => entry.score);
+    if (best !== null) scores.push(best);
+    this.setBest(scores.length > 0 ? Math.max(...scores) : undefined);
   }
 
   /** ID の発行・更新を POST する。通信に失敗したら undefined */
@@ -350,8 +357,13 @@ export class Client {
 
   private raiseBest(score: number) {
     if (this.best !== undefined && this.best >= score) return;
+    this.setBest(score);
+  }
+
+  private setBest(score: number | undefined) {
     this.best = score;
-    this.write(this.bestKey, String(score));
+    if (score === undefined) this.remove(this.bestKey);
+    else this.write(this.bestKey, String(score));
   }
 
   private storedPlayer(): StoredPlayer | undefined {

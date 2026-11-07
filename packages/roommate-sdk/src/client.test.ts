@@ -229,6 +229,92 @@ describe('Client', () => {
     expect(c.bestScore()).toBe(80);
   });
 
+  it('サーバーの自己ベストが手元より低ければ、サーバーに合わせる', async () => {
+    const api = fakeApi({
+      'POST /players': () => [201, issued],
+      'GET /games/g/scores/me': () => [200, { best: 300 }],
+    });
+    const storage = memoryStorage({ 'roommate.best.g': '99999' });
+    const c = client(api, storage);
+    await c.token();
+
+    expect(c.bestScore()).toBe(300);
+    expect(storage.data.get('roommate.best.g')).toBe('300');
+  });
+
+  it('サーバーに自己ベストが無ければ、手元の自己ベストも消す', async () => {
+    const api = fakeApi({
+      'POST /players': () => [201, issued],
+      'GET /games/g/scores/me': () => [200, { best: null }],
+    });
+    const storage = memoryStorage({ 'roommate.best.g': '99999' });
+    const c = client(api, storage);
+    await c.token();
+
+    expect(c.bestScore()).toBeUndefined();
+    expect(storage.data.has('roommate.best.g')).toBe(false);
+  });
+
+  it('まだ送れていないスコアは、サーバーの自己ベストに合わせても残す', async () => {
+    const pending = [{ day: '2026-06-15', score: 500, durationMs: 60_000 }];
+    const api = fakeApi({
+      'POST /players': () => [201, issued],
+      'GET /games/g/scores/me': () => [200, { best: 300 }],
+      'POST /games/g/scores': () => [503, { error: 'unavailable' }],
+    });
+    const storage = memoryStorage({
+      'roommate.best.g': '99999',
+      'roommate.pending.g': JSON.stringify(pending),
+    });
+    const c = client(api, storage);
+    await c.token();
+
+    expect(c.bestScore()).toBe(500);
+  });
+
+  it('自己ベストを読んでいる間に送ったスコアは、読み終えても残す', async () => {
+    let answer: (() => void) | undefined;
+    const api = fakeApi({
+      'POST /players': () => [201, issued],
+      'GET /games/g/scores/me': () => [200, { best: 100 }],
+      // 送れずに手元に残っても、自己ベストは下がらない
+      'POST /games/g/scores': () => [503, { error: 'unavailable' }],
+    });
+    const fetch = (async (input: string, init?: RequestInit) => {
+      if (new URL(input).pathname === '/games/g/scores/me') {
+        await new Promise<void>((resolve) => (answer = resolve));
+      }
+      return api.fetch(input, init);
+    }) as typeof globalThis.fetch;
+    const c = new Client({
+      apiOrigin: API,
+      game: 'g',
+      fetch,
+      storage: memoryStorage(),
+      now: () => NOW,
+    });
+    await settle();
+
+    const sent = c.submitScore(400, 60_000);
+    answer!();
+    await sent;
+
+    expect(c.bestScore()).toBe(400);
+  });
+
+  it('サーバーの自己ベストを読めなければ、手元の自己ベストを使う', async () => {
+    const api = fakeApi({
+      'POST /players': () => [201, issued],
+      'GET /games/g/scores/me': () => [503, { error: 'unavailable' }],
+    });
+    const storage = memoryStorage({ 'roommate.best.g': '700' });
+    const c = client(api, storage);
+    await c.token();
+
+    expect(c.bestScore()).toBe(700);
+    expect(storage.data.get('roommate.best.g')).toBe('700');
+  });
+
   it('送れなかったスコアは手元に残し、次に開いたときに送る', async () => {
     const storage = memoryStorage();
     const offline = {
