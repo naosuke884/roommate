@@ -9,7 +9,7 @@ interface Props {
   noindex?: boolean;
 }
 
-const SITE_DESCRIPTION = '同じ日に同じコースを遊ぶ人と、スコアを競うブラウザゲーム。';
+const SITE_DESCRIPTION = '同じ日に同じゲームを遊ぶ人と、スコアを競うブラウザゲーム。';
 
 const { title, description = SITE_DESCRIPTION, noindex = false } = Astro.props;
 const pageTitle = title ? `${title} | roommate` : 'roommate';
