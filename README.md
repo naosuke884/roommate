@@ -133,3 +133,12 @@ API は `JWT_SECRET` で匿名 ID のトークンに署名する。替えると�
 本番のスコアを見る・隠す・消すスクリプトは [`apps/api/scripts/scores.sh`](apps/api/scripts/scores.sh)。使い方はファイル先頭のコメントにある。
 
 ゲームごとの確かめる点数(`packages/catalog` の `holdScoreAbove`)を超えたスコアは保留になり、承認するまでランキングに出ない。`scores.sh held` で一覧を見て、`approve` で承認、`hide` で却下する。
+
+## 死活監視
+
+UptimeRobot の無料プランで、本番を 5 分ごとに外から見ている。落ちると roommate@hayashi-naoki.com にメールが届く。
+
+- `https://api.roommate.hayashi-naoki.com/health`
+- `https://api.roommate.hayashi-naoki.com/games/grapnl/rankings/2026-10-31`: 本文に `"entries"` があるか。`/health` は D1 に触れないので、D1 の障害はこちらで気づく
+- `https://roommate.hayashi-naoki.com/`
+- `https://play.roommate.hayashi-naoki.com/grapnl/`
