@@ -27,7 +27,7 @@
   - crate: `roommate-sdk = { git = "https://github.com/naosuke884/roommate", tag = "roommate-sdk-v<version>" }`
   - JS: そのタグの `packages/roommate-sdk/dist/roommate-sdk.js` をゲームの `web/` に置き、`<script src="roommate-sdk.js" data-game="<slug>"></script>` で読む
 - `dist/roommate-sdk.js` はビルドしたものを commit する。CI がビルドと同じかを確かめる
-- 出すときは `crates/roommate-sdk/Cargo.toml` の version を上げて main に入れ、`roommate-sdk-v<version>` のタグを push する
+- 出すときは `crates/roommate-sdk/Cargo.toml` の version を上げて main に入れる。CI が通ると、その commit に `roommate-sdk-v<version>` のタグを打つ。タグは手で打たない
 
 ## 開発
 

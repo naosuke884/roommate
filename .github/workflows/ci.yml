@@ -54,6 +54,36 @@ jobs:
       - run: cargo test
       - run: cargo build --target wasm32-unknown-unknown --release
 
+  # crate の version のタグが無ければ、その commit に打つ。ゲームはこのタグの crate と roommate-sdk.js を使う。
+  # 前の push との差分ではなくタグの有無で決めるので、再実行や前の失敗のあとでも打ち漏らさない
+  tag-roommate-sdk:
+    needs: [check, roommate-sdk-rust]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    concurrency:
+      group: tag-roommate-sdk
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v7
+      # GITHUB_TOKEN で push したタグでは workflow が起きない。タグで動かす job を足すなら PAT か GitHub App が要る
+      - name: version のタグが無ければ打つ
+        run: |
+          version=$(sed -n 's/^version = "\(.*\)"$/\1/p' crates/roommate-sdk/Cargo.toml | head -n 1)
+          tag="roommate-sdk-v$version"
+          if git ls-remote --exit-code --tags origin "refs/tags/$tag" >/dev/null; then
+            echo "$tag はもうある"
+            exit 0
+          fi
+          latest=$(git ls-remote --tags --refs origin 'roommate-sdk-v*' | sed 's#.*refs/tags/roommate-sdk-v##' | sort -V | tail -n 1)
+          if [ -n "$latest" ] && [ "$(printf '%s\n%s\n' "$latest" "$version" | sort -V | tail -n 1)" != "$version" ]; then
+            echo "::error::version $version が、出した最新の $latest より古い"
+            exit 1
+          fi
+          git tag "$tag" "$GITHUB_SHA"
+          git push origin "refs/tags/$tag"
+
   deploy:
     needs: [check, roommate-sdk-rust]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
