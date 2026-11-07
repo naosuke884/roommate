@@ -85,6 +85,20 @@ describe('GET /games/:slug/scores/me', () => {
     expect(await daily.json()).toEqual({ best: 200, rank: expect.any(Number) });
   });
 
+  it('隠したスコアは、全期間の自己ベストにも数えない', async () => {
+    const me = await issuePlayer();
+    const insert = env.DB.prepare(
+      'INSERT INTO scores (game, day, player_id, score, duration_ms, created_at, hidden_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+    );
+    await env.DB.batch([
+      insert.bind(GAME, '2026-03-01', me.playerId, 300, 60_000, 1, null),
+      insert.bind(GAME, '2026-03-02', me.playerId, 99_999, 60_000, 2, 3),
+    ]);
+
+    const res = await request(`/games/${GAME}/scores/me`, { token: me.token });
+    expect(await res.json()).toEqual({ best: 300 });
+  });
+
   it('day を指定すると、50 位より下でもその日の順位を返す', async () => {
     const day = '2026-02-01';
     const me = await issuePlayer();
@@ -104,7 +118,7 @@ describe('GET /games/:slug/scores/me', () => {
 
     const res = await request(`/games/${GAME}/scores/me?day=${day}`, { token: me.token });
     // 1,001〜1,050 点の 50 人と、先に 1,000 点を出した 1 人の下
-    expect(await res.json()).toEqual({ best: 99_999, rank: 52 });
+    expect(await res.json()).toEqual({ best: 1_000, rank: 52 });
   });
 
   it('その日のスコアが無ければ順位は null', async () => {

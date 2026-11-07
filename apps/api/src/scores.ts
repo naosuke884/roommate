@@ -149,11 +149,12 @@ function isDay(value: string): boolean {
   return /^\d{4}-\d{2}-\d{2}$/.test(value) && !Number.isNaN(Date.parse(`${value}T00:00:00Z`));
 }
 
+/** 自己ベスト。day を省くと全期間。隠したスコアはランキングと同じく数えない */
 async function bestScore(db: D1Database, game: string, playerId: string, day?: string) {
   const row = await db
     .prepare(
       `SELECT MAX(score) AS best FROM scores
-       WHERE game = ? AND player_id = ? AND (?3 IS NULL OR day = ?3)`,
+       WHERE game = ? AND player_id = ? AND (?3 IS NULL OR day = ?3) AND hidden_at IS NULL`,
     )
     .bind(game, playerId, day ?? null)
     .first<{ best: number | null }>();
