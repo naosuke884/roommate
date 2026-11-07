@@ -1,5 +1,6 @@
 import { Hono } from 'hono';
 import { issuePlayerToken, requirePlayer, requireRefreshablePlayer } from './auth.ts';
+import { issueLimitKey } from './limits.ts';
 import { parseName } from './names.ts';
 
 export const players = new Hono<{ Bindings: Env }>();
@@ -7,7 +8,7 @@ export const players = new Hono<{ Bindings: Env }>();
 // 新しい匿名 ID を発行する。ID はクライアントに決めさせない
 players.post('/', async (c) => {
   const ip = c.req.header('CF-Connecting-IP') ?? 'unknown';
-  const { success } = await c.env.PLAYER_ISSUE_LIMITER.limit({ key: ip });
+  const { success } = await c.env.PLAYER_ISSUE_LIMITER.limit({ key: issueLimitKey(ip) });
   if (!success) {
     return c.json({ error: 'too_many_requests' }, 429);
   }
@@ -74,3 +75,23 @@ players.delete('/me', requireRefreshablePlayer, async (c) => {
   ]);
   return c.body(null, 204);
 });
+
+/** スコアも名前も無い ID を消すまでの日数。遊び始めたばかりの人の ID は消さない */
+export const UNUSED_PLAYER_DAYS = 7;
+
+/**
+ * 発行してから `UNUSED_PLAYER_DAYS` 日たっても、スコアも名前も無い ID を消す。
+ * 発行は誰でもできるので、使われない行が溜まり続けないようにする。
+ * 消した ID のトークンは 401 になり、SDK は新しい ID をもらい直す。失うものは無い
+ */
+export async function deleteUnusedPlayers(db: D1Database, now = Date.now()): Promise<number> {
+  const { meta } = await db
+    .prepare(
+      `DELETE FROM players
+       WHERE created_at < ? AND name IS NULL
+         AND NOT EXISTS (SELECT 1 FROM scores WHERE scores.player_id = players.id)`,
+    )
+    .bind(now - UNUSED_PLAYER_DAYS * 24 * 60 * 60 * 1000)
+    .run();
+  return meta.changes;
+}

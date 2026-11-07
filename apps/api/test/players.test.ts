@@ -2,6 +2,7 @@ import { siteOrigin } from '@roommate/catalog';
 import { env } from 'cloudflare:workers';
 import { sign } from 'hono/jwt';
 import { describe, expect, it } from 'vitest';
+import { UNUSED_PLAYER_DAYS, deleteUnusedPlayers } from '../src/players.ts';
 import {
   REFRESH_GRACE_SECONDS,
   TOKEN_TTL_SECONDS,
@@ -28,6 +29,19 @@ describe('POST /players', () => {
     const a = await issue();
     const b = await issue();
     expect(a.playerId).not.toBe(b.playerId);
+  });
+
+  it('同じ IPv6 の /64 から短時間に呼びすぎると、アドレスを替えても 429 を返す', async () => {
+    const statuses: number[] = [];
+    for (let i = 1; i <= 21; i++) {
+      const res = await request('/players', {
+        method: 'POST',
+        headers: { 'CF-Connecting-IP': `2001:db8:99:1::${i.toString(16)}` },
+      });
+      statuses.push(res.status);
+    }
+    expect(statuses.slice(0, 10).every((s) => s === 201)).toBe(true);
+    expect(statuses).toContain(429);
   });
 
   it('同じ IP から短時間に呼びすぎると 429 を返す', async () => {
@@ -327,5 +341,37 @@ describe('CORS', () => {
       headers: { Origin: 'https://evil.example', 'Access-Control-Request-Method': 'POST' },
     });
     expect(res.headers.get('Access-Control-Allow-Origin')).toBeNull();
+  });
+});
+
+describe('deleteUnusedPlayers', () => {
+  const DAY = 24 * 60 * 60 * 1000;
+
+  it('発行から日数がたった、スコアも名前も無い ID だけを消す', async () => {
+    const now = Date.now();
+    const old = now - (UNUSED_PLAYER_DAYS + 1) * DAY;
+    const insert = env.DB.prepare('INSERT INTO players (id, created_at, name) VALUES (?, ?, ?)');
+    await env.DB.batch([
+      insert.bind('cleanup-unused', old, null),
+      insert.bind('cleanup-named', old, 'あおい'),
+      insert.bind('cleanup-scored', old, null),
+      insert.bind('cleanup-new', now - DAY, null),
+    ]);
+    await env.DB.prepare(
+      'INSERT INTO scores (game, day, player_id, score, duration_ms, created_at) VALUES (?, ?, ?, ?, ?, ?)',
+    )
+      .bind('grapnl', today(), 'cleanup-scored', 10, 60_000, old)
+      .run();
+
+    expect(await deleteUnusedPlayers(env.DB, now)).toBeGreaterThanOrEqual(1);
+
+    const { results } = await env.DB.prepare(
+      "SELECT id FROM players WHERE id LIKE 'cleanup-%' ORDER BY id",
+    ).all<{ id: string }>();
+    expect(results.map((row) => row.id)).toEqual([
+      'cleanup-named',
+      'cleanup-new',
+      'cleanup-scored',
+    ]);
   });
 });

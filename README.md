@@ -136,6 +136,8 @@ API は `JWT_SECRET` で匿名 ID のトークンに署名する。替えると�
 
 ランキングの名前はプレイヤーが付ける。ふさわしくない名前は、`scores.sh find` で名前の `#` の後ろ 4 文字からプレイヤー ID を探し、`clear-name` で外して「名無し」に戻す。
 
+スコアも名前も無い匿名 ID は、API の cron(毎日 UTC 3:17、`apps/api/wrangler.jsonc` の `triggers`)が発行から 7 日たったものを消す。誰でも ID を発行できるので、使われない行が溜まらないようにするため。
+
 ## 死活監視
 
 UptimeRobot の無料プランで、本番を 5 分ごとに外から見ている。落ちると roommate@hayashi-naoki.com にメールが届く。

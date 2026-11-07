@@ -10,6 +10,8 @@
     // 部屋の WebSocket はトークンを query で受け取るので、ログに残さない
     "redact_query_string": true,
   },
+  // 使われなかった匿名 ID を消す(src/index.ts の scheduled)。UTC 3:17
+  "triggers": { "crons": ["17 3 * * *"] },
   "routes": [{ "pattern": "api.roommate.hayashi-naoki.com", "custom_domain": true }],
   "vars": {
     // 追加で API を呼べる origin。カンマ区切り。
