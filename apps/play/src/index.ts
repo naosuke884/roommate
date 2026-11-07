@@ -12,6 +12,11 @@ export default {
       return text(request.method, 'Method Not Allowed', 405, csp, { Allow: 'GET, HEAD' });
     }
 
+    // 検索から来る人にはサイトのゲームページを開いてほしいので、配信はすべて拒否する
+    if (url.pathname === '/robots.txt') {
+      return text(request.method, 'User-agent: *\nDisallow: /\n', 200, csp);
+    }
+
     const resolved = resolvePath(url.pathname);
     if (resolved.kind === 'not-found') return text(request.method, 'Not Found', 404, csp);
     if (resolved.kind === 'redirect') {
