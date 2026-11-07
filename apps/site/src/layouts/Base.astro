@@ -14,6 +14,8 @@ const SITE_DESCRIPTION = '同じ日に同じコースを遊ぶ人と、スコア
 const { title, description = SITE_DESCRIPTION, noindex = false } = Astro.props;
 const pageTitle = title ? `${title} | roommate` : 'roommate';
 const canonical = new URL(Astro.url.pathname, Astro.site);
+// リンクの共有で出る画像。どのページも同じものを使う
+const ogImage = new URL('/og.png', Astro.site);
 ---
 
 <!doctype html>
@@ -22,6 +24,9 @@ const canonical = new URL(Astro.url.pathname, Astro.site);
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>{pageTitle}</title>
+    <link rel="icon" href="/favicon.ico" sizes="32x32" />
+    <link rel="icon" href="/logo.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <meta name="description" content={description} />
     {noindex ? <meta name="robots" content="noindex" /> : <link rel="canonical" href={canonical} />}
     <meta property="og:site_name" content="roommate" />
@@ -30,7 +35,11 @@ const canonical = new URL(Astro.url.pathname, Astro.site);
     {!noindex && <meta property="og:url" content={canonical} />}
     <meta property="og:type" content="website" />
     <meta property="og:locale" content="ja_JP" />
-    <meta name="twitter:card" content="summary" />
+    <meta property="og:image" content={ogImage} />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="roommate のロゴ" />
+    <meta name="twitter:card" content="summary_large_image" />
   </head>
   <body>
     <header>
