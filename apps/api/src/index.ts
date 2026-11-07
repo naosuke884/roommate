@@ -12,7 +12,7 @@ const appCors = cors({
   origin: (origin, c: Context<{ Bindings: Env }>) =>
     isAllowedOrigin(origin, c.env.ALLOWED_ORIGINS) ? origin : null,
   allowHeaders: ['Authorization', 'Content-Type'],
-  allowMethods: ['GET', 'POST', 'DELETE'],
+  allowMethods: ['GET', 'POST', 'PUT', 'DELETE'],
   maxAge: 86400,
 });
 

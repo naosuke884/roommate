@@ -51,7 +51,14 @@ describe('GET /players/me', () => {
     const { playerId, token } = await issue();
     const res = await request('/players/me', { token });
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ playerId });
+    expect(await res.json()).toEqual({ playerId, name: null });
+  });
+
+  it('消したプレイヤーのトークンなら 401 を返す', async () => {
+    const { playerId, token } = await issue();
+    await env.DB.prepare('DELETE FROM players WHERE id = ?').bind(playerId).run();
+    const res = await request('/players/me', { token });
+    expect(res.status).toBe(401);
   });
 
   it('トークンが無ければ 401 を返す', async () => {
@@ -75,6 +82,59 @@ describe('GET /players/me', () => {
     const longAgo = Math.floor(Date.now() / 1000) - TOKEN_TTL_SECONDS - 60;
     const { token } = await issuePlayerToken(playerId, env.JWT_SECRET, longAgo);
     const res = await request('/players/me', { token });
+    expect(res.status).toBe(401);
+  });
+});
+
+describe('PUT /players/me/name', () => {
+  function putName(token: string, body: unknown) {
+    return request('/players/me/name', {
+      method: 'PUT',
+      token,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+  }
+
+  it('名前を保存し、GET /players/me で返す', async () => {
+    const { playerId, token } = await issue();
+    const res = await putName(token, { name: '  さくら  もち ' });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ name: 'さくら もち' });
+    const me = await request('/players/me', { token });
+    expect(await me.json()).toEqual({ playerId, name: 'さくら もち' });
+  });
+
+  it('空にすると名前を外す', async () => {
+    const { playerId, token } = await issue();
+    await putName(token, { name: 'さくら' });
+    const res = await putName(token, { name: '   ' });
+    expect(await res.json()).toEqual({ name: null });
+    const me = await request('/players/me', { token });
+    expect(await me.json()).toEqual({ playerId, name: null });
+  });
+
+  it('使えない名前は 400 で拒み、前の名前を残す', async () => {
+    const { playerId, token } = await issue();
+    await putName(token, { name: 'さくら' });
+    for (const name of ['あ'.repeat(13), 'a#b', 'a\u200bb', 42]) {
+      const res = await putName(token, { name });
+      expect(res.status).toBe(400);
+      expect(await res.json()).toEqual({ error: 'invalid_name' });
+    }
+    const me = await request('/players/me', { token });
+    expect(await me.json()).toEqual({ playerId, name: 'さくら' });
+  });
+
+  it('消したプレイヤーのトークンなら 401 を返す', async () => {
+    const { playerId, token } = await issue();
+    await env.DB.prepare('DELETE FROM players WHERE id = ?').bind(playerId).run();
+    const res = await putName(token, { name: 'さくら' });
+    expect(res.status).toBe(401);
+  });
+
+  it('トークンが無ければ 401 を返す', async () => {
+    const res = await request('/players/me/name', { method: 'PUT', body: '{"name":"a"}' });
     expect(res.status).toBe(401);
   });
 });
@@ -243,6 +303,14 @@ describe('CORS', () => {
       headers: { Origin: origin, 'Access-Control-Request-Method': 'POST' },
     });
     expect(res.headers.get('Access-Control-Allow-Origin')).toBe(origin);
+  });
+
+  it('PUT の preflight を許す', async () => {
+    const res = await request('/players/me/name', {
+      method: 'OPTIONS',
+      headers: { Origin: siteOrigin, 'Access-Control-Request-Method': 'PUT' },
+    });
+    expect(res.headers.get('Access-Control-Allow-Methods')).toContain('PUT');
   });
 
   it('DELETE の preflight を許す', async () => {

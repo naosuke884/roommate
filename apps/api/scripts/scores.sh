@@ -4,7 +4,8 @@
 #   ./scripts/scores.sh hide <score-id>          スコアをランキングから隠す(保留を却下するときも使う)
 #   ./scripts/scores.sh held                     確かめる点数を超えて保留にしているスコアを古い順に出す
 #   ./scripts/scores.sh approve <score-id>       保留を承認し、ランキングに出す
-#   ./scripts/scores.sh find <name>              ランキングの名前(名無し#1a2b の 1a2b)からプレイヤー ID を探す
+#   ./scripts/scores.sh find <name>              ランキングの名前(あおい#1a2b の 1a2b)からプレイヤー ID を探す
+#   ./scripts/scores.sh clear-name <player-id>   ふさわしくない名前を外し、「名無し」に戻す
 #   ./scripts/scores.sh hide-player <player-id>  その人のスコアをまとめてランキングから隠す
 #   ./scripts/scores.sh delete-player <player-id> その人のスコアとプレイヤーの行を消す(削除依頼のとき)
 set -euo pipefail
@@ -40,7 +41,12 @@ case "${1:-}" in
     name=${2:?名前の # の後ろ 4 文字を指定する}
     name=${name#*#}
     [[ $name =~ ^[0-9a-f]{4}$ ]] || { echo "名前は 16 進の 4 文字" >&2; exit 1; }
-    d1 "SELECT id, created_at FROM players WHERE id LIKE '$name%'"
+    d1 "SELECT id, name, created_at FROM players WHERE id LIKE '$name%'"
+    ;;
+  clear-name)
+    id=${2:?player-id を指定する}
+    player_id "$id"
+    d1 "UPDATE players SET name = NULL WHERE id = '$id'"
     ;;
   hide-player)
     id=${2:?player-id を指定する}
@@ -55,7 +61,7 @@ case "${1:-}" in
     d1 "DELETE FROM scores WHERE player_id = '$id'; DELETE FROM players WHERE id = '$id'"
     ;;
   *)
-    sed -n '2,9p' "$0" >&2
+    sed -n '2,10p' "$0" >&2
     exit 1
     ;;
 esac

@@ -1,6 +1,7 @@
 import { type Game, findGame } from '@roommate/catalog';
 import { Hono } from 'hono';
 import { requirePlayer } from './auth.ts';
+import { displayName } from './names.ts';
 
 const RANKING_SIZE = 50;
 const MIN_DURATION_MS = 1_000;
@@ -75,16 +76,17 @@ scores.get('/games/:slug/rankings/:day', async (c) => {
   }
   const { results } = await c.env.DB.prepare(
     `${DAILY_BEST}
-     SELECT player_id, score FROM best
-     ORDER BY score DESC, created_at ASC
+     SELECT best.player_id, best.score, players.name FROM best
+     LEFT JOIN players ON players.id = best.player_id
+     ORDER BY best.score DESC, best.created_at ASC
      LIMIT ?3`,
   )
     .bind(c.get('game').slug, day, RANKING_SIZE)
-    .all<{ player_id: string; score: number }>();
+    .all<{ player_id: string; score: number; name: string | null }>();
 
   const entries = results.map((row, i) => ({
     rank: i + 1,
-    name: anonymousName(row.player_id),
+    name: displayName(row.name, row.player_id),
     score: row.score,
   }));
   c.header('Cache-Control', 'public, max-age=30');
@@ -165,9 +167,4 @@ async function bestScore(db: D1Database, game: string, playerId: string, day?: s
     .bind(game, playerId, day ?? null)
     .first<{ best: number | null }>();
   return row?.best ?? null;
-}
-
-/** ランキングに出す匿名の名前。ID の先頭 4 文字を使う */
-export function anonymousName(playerId: string): string {
-  return `名無し#${playerId.slice(0, 4)}`;
 }

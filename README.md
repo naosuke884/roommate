@@ -134,6 +134,8 @@ API は `JWT_SECRET` で匿名 ID のトークンに署名する。替えると�
 
 ゲームごとの確かめる点数(`packages/catalog` の `holdScoreAbove`)を超えたスコアは保留になり、承認するまでランキングに出ない。`scores.sh held` で一覧を見て、`approve` で承認、`hide` で却下する。
 
+ランキングの名前はプレイヤーが付ける。ふさわしくない名前は、`scores.sh find` で名前の `#` の後ろ 4 文字からプレイヤー ID を探し、`clear-name` で外して「名無し」に戻す。
+
 ## 死活監視
 
 UptimeRobot の無料プランで、本番を 5 分ごとに外から見ている。落ちると roommate@hayashi-naoki.com にメールが届く。

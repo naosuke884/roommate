@@ -1,7 +1,8 @@
 import { findGame } from '@roommate/catalog';
 import { env } from 'cloudflare:workers';
 import { describe, expect, it } from 'vitest';
-import { anonymousName, parseScore } from '../src/scores.ts';
+import { displayName } from '../src/names.ts';
+import { parseScore } from '../src/scores.ts';
 import { issuePlayer, request, today } from './helpers.ts';
 
 const GAME = 'grapnl';
@@ -75,7 +76,7 @@ describe('POST /games/:slug/scores', () => {
 
     const ranking = await request(`/games/${GAME}/rankings/${day}`);
     const { entries } = await ranking.json<{ entries: { name: string }[] }>();
-    expect(entries.map((entry) => entry.name)).not.toContain(anonymousName(playerId));
+    expect(entries.map((entry) => entry.name)).not.toContain(displayName(null, playerId));
     const me = await request(`/games/${GAME}/scores/me?day=${day}`, { token });
     expect(await me.json()).toEqual({ best: score, rank: null });
   });
@@ -202,8 +203,8 @@ describe('GET /games/:slug/rankings/:day', () => {
     expect(await res.json()).toEqual({
       day,
       entries: [
-        { rank: 1, name: anonymousName(a.playerId), score: 400 },
-        { rank: 2, name: anonymousName(b.playerId), score: 300 },
+        { rank: 1, name: displayName(null, a.playerId), score: 400 },
+        { rank: 2, name: displayName(null, b.playerId), score: 300 },
       ],
     });
   });
@@ -225,8 +226,34 @@ describe('GET /games/:slug/rankings/:day', () => {
     const res = await request(`/games/${GAME}/rankings/${day}`);
     const { entries } = await res.json<{ entries: { name: string }[] }>();
     expect(entries.map((entry) => entry.name)).toEqual([
-      anonymousName(b.playerId),
-      anonymousName(a.playerId),
+      displayName(null, b.playerId),
+      displayName(null, a.playerId),
+    ]);
+  });
+
+  it('名前を付けた人は「名前#ID の先頭 4 文字」で出す', async () => {
+    const day = '2026-01-21';
+    const a = await issuePlayer();
+    const b = await issuePlayer();
+    await request('/players/me/name', {
+      method: 'PUT',
+      token: a.token,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: 'あおい' }),
+    });
+    const insert = env.DB.prepare(
+      'INSERT INTO scores (game, day, player_id, score, duration_ms, created_at) VALUES (?, ?, ?, ?, ?, ?)',
+    );
+    await env.DB.batch([
+      insert.bind(GAME, day, a.playerId, 200, 60_000, 1),
+      insert.bind(GAME, day, b.playerId, 100, 60_000, 2),
+    ]);
+
+    const res = await request(`/games/${GAME}/rankings/${day}`);
+    const { entries } = await res.json<{ entries: { name: string }[] }>();
+    expect(entries.map((entry) => entry.name)).toEqual([
+      `あおい#${a.playerId.slice(0, 4)}`,
+      `名無し#${b.playerId.slice(0, 4)}`,
     ]);
   });
 
