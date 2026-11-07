@@ -1,0 +1,5 @@
+# sitemap のホストは packages/catalog の siteOrigin と揃える
+User-agent: *
+Allow: /
+
+Sitemap: https://roommate.hayashi-naoki.com/sitemap-index.xml
