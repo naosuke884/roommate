@@ -58,6 +58,39 @@ describe('POST /games/:slug/scores', () => {
     expect(await res.json()).toEqual({ error: 'implausible_score' });
   });
 
+  it('確かめる点数を超えたスコアは保留にし、ランキングに出さず、本人の自己ベストには数える', async () => {
+    const game = findGame(GAME)!;
+    const day = today();
+    const { playerId, token } = await issuePlayer();
+    const score = game.holdScoreAbove + 1;
+
+    const res = await submit(token, { day, score, durationMs: 3_600_000 });
+    expect(res.status).toBe(201);
+    expect(await res.json()).toEqual({ best: score });
+
+    const row = await env.DB.prepare('SELECT held_at FROM scores WHERE player_id = ?')
+      .bind(playerId)
+      .first<{ held_at: number | null }>();
+    expect(row?.held_at).toEqual(expect.any(Number));
+
+    const ranking = await request(`/games/${GAME}/rankings/${day}`);
+    const { entries } = await ranking.json<{ entries: { name: string }[] }>();
+    expect(entries.map((entry) => entry.name)).not.toContain(anonymousName(playerId));
+    const me = await request(`/games/${GAME}/scores/me?day=${day}`, { token });
+    expect(await me.json()).toEqual({ best: score, rank: null });
+  });
+
+  it('確かめる点数ちょうどのスコアは保留にしない', async () => {
+    const game = findGame(GAME)!;
+    const { playerId, token } = await issuePlayer();
+    await submit(token, { day: today(), score: game.holdScoreAbove, durationMs: 3_600_000 });
+
+    const row = await env.DB.prepare('SELECT held_at FROM scores WHERE player_id = ?')
+      .bind(playerId)
+      .first<{ held_at: number | null }>();
+    expect(row?.held_at).toBeNull();
+  });
+
   it('同じプレイヤーが短時間に送りすぎると 429 を返す', async () => {
     const { token } = await issuePlayer();
     const statuses: number[] = [];
@@ -115,10 +148,16 @@ describe('GET /games/:slug/scores/me', () => {
       insert.bind(GAME, day, me.playerId, 1_000, 60_000, 2, null),
       insert.bind(GAME, day, me.playerId, 99_999, 60_000, 3, 4),
     ]);
+    // 保留中のスコアは、自己ベストには数えるが順位には数えない
+    await env.DB.prepare(
+      'INSERT INTO scores (game, day, player_id, score, duration_ms, created_at, held_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+    )
+      .bind(GAME, day, me.playerId, 50_000, 60_000, 5, 5)
+      .run();
 
     const res = await request(`/games/${GAME}/scores/me?day=${day}`, { token: me.token });
     // 1,001〜1,050 点の 50 人と、先に 1,000 点を出した 1 人の下
-    expect(await res.json()).toEqual({ best: 1_000, rank: 52 });
+    expect(await res.json()).toEqual({ best: 50_000, rank: 52 });
   });
 
   it('その日のスコアが無ければ順位は null', async () => {
@@ -151,6 +190,12 @@ describe('GET /games/:slug/rankings/:day', () => {
       // 別の日のスコアは出さない
       insert.bind(GAME, '2026-01-16', b.playerId, 999, 60_000, 6, null),
     ]);
+    // 保留中のスコアは出さない
+    await env.DB.prepare(
+      'INSERT INTO scores (game, day, player_id, score, duration_ms, created_at, held_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+    )
+      .bind(GAME, day, b.playerId, 50_000, 60_000, 7, 7)
+      .run();
 
     const res = await request(`/games/${GAME}/rankings/${day}`);
     expect(res.status).toBe(200);

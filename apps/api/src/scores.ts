@@ -35,12 +35,15 @@ scores.post('/games/:slug/scores', requirePlayer, async (c) => {
     return c.json({ error: input }, 400);
   }
 
+  const now = Date.now();
+  // 確かめる点数を超えたスコアは保留にし、運営が承認するまでランキングに出さない
+  const heldAt = input.score > game.holdScoreAbove ? now : null;
   // 運営が消したプレイヤーのトークンは、期限まで署名が通る。保存せずに 401 を返し、ID をもらい直させる
   const { meta } = await c.env.DB.prepare(
-    `INSERT INTO scores (game, day, player_id, score, duration_ms, created_at)
-     SELECT ?1, ?2, ?3, ?4, ?5, ?6 WHERE EXISTS (SELECT 1 FROM players WHERE id = ?3)`,
+    `INSERT INTO scores (game, day, player_id, score, duration_ms, created_at, held_at)
+     SELECT ?1, ?2, ?3, ?4, ?5, ?6, ?7 WHERE EXISTS (SELECT 1 FROM players WHERE id = ?3)`,
   )
-    .bind(game.slug, input.day, playerId, input.score, input.durationMs, Date.now())
+    .bind(game.slug, input.day, playerId, input.score, input.durationMs, now, heldAt)
     .run();
   if (meta.changes === 0) {
     return c.json({ error: 'unauthorized' }, 401);
@@ -89,17 +92,17 @@ scores.get('/games/:slug/rankings/:day', async (c) => {
 });
 
 /**
- * その日のプレイヤーごとの最高点(隠したものを除く)を `best` として持つ。?1 は game、?2 は day。
+ * その日のプレイヤーごとの最高点(隠したものと保留中のものを除く)を `best` として持つ。?1 は game、?2 は day。
  * 同点なら、その点を先に出した人を上にするので、最高点を出した時刻も持つ
  */
 const DAILY_BEST = `WITH ranked AS (
   SELECT player_id, score, created_at,
     ROW_NUMBER() OVER (PARTITION BY player_id ORDER BY score DESC, created_at ASC) AS nth
   FROM scores
-  WHERE game = ?1 AND day = ?2 AND hidden_at IS NULL
+  WHERE game = ?1 AND day = ?2 AND hidden_at IS NULL AND held_at IS NULL
 ), best AS (SELECT player_id, score, created_at FROM ranked WHERE nth = 1)`;
 
-/** ランキングでの順位。その日のスコアが無ければ null */
+/** ランキングでの順位。保留中のスコアは数えない。その日のスコアが無ければ null */
 async function rankOf(db: D1Database, game: string, day: string, playerId: string) {
   const row = await db
     .prepare(
@@ -149,7 +152,10 @@ function isDay(value: string): boolean {
   return /^\d{4}-\d{2}-\d{2}$/.test(value) && !Number.isNaN(Date.parse(`${value}T00:00:00Z`));
 }
 
-/** 自己ベスト。day を省くと全期間。隠したスコアはランキングと同じく数えない */
+/**
+ * 自己ベスト。day を省くと全期間。隠したスコアはランキングと同じく数えない。
+ * 保留中のスコアは数える。正しく高い点を出した人に、点が消えたように見せないため
+ */
 async function bestScore(db: D1Database, game: string, playerId: string, day?: string) {
   const row = await db
     .prepare(

@@ -18,6 +18,12 @@ describe('games', () => {
       expect(game.maxScorePerSecond).toBeGreaterThan(0);
     }
   });
+
+  it('確かめる点数が正の数になっている', () => {
+    for (const game of games) {
+      expect(game.holdScoreAbove).toBeGreaterThan(0);
+    }
+  });
 });
 
 describe('playUrl', () => {

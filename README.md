@@ -131,3 +131,5 @@ API は `JWT_SECRET` で匿名 ID のトークンに署名する。替えると�
 ## スコアを隠す・消す
 
 本番のスコアを見る・隠す・消すスクリプトは [`apps/api/scripts/scores.sh`](apps/api/scripts/scores.sh)。使い方はファイル先頭のコメントにある。
+
+ゲームごとの確かめる点数(`packages/catalog` の `holdScoreAbove`)を超えたスコアは保留になり、承認するまでランキングに出ない。`scores.sh held` で一覧を見て、`approve` で承認、`hide` で却下する。

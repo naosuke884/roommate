@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 # 運営用: 本番のスコアを見る・隠す・消す。wrangler にログインした状態で使う
 #   ./scripts/scores.sh top <game> <day>         その日の上位 20 件を ID 付きで出す
-#   ./scripts/scores.sh hide <score-id>          スコアをランキングから隠す
+#   ./scripts/scores.sh hide <score-id>          スコアをランキングから隠す(保留を却下するときも使う)
+#   ./scripts/scores.sh held                     確かめる点数を超えて保留にしているスコアを古い順に出す
+#   ./scripts/scores.sh approve <score-id>       保留を承認し、ランキングに出す
 #   ./scripts/scores.sh find <name>              ランキングの名前(名無し#1a2b の 1a2b)からプレイヤー ID を探す
 #   ./scripts/scores.sh hide-player <player-id>  その人のスコアをまとめてランキングから隠す
 #   ./scripts/scores.sh delete-player <player-id> その人のスコアとプレイヤーの行を消す(削除依頼のとき)
@@ -19,12 +21,20 @@ case "${1:-}" in
     game=${2:?game を指定する}
     day=${3:?day を YYYY-MM-DD で指定する}
     [[ $game =~ ^[a-z0-9-]+$ && $day =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]] || { echo "game か day の形が違う" >&2; exit 1; }
-    d1 "SELECT id, player_id, score, duration_ms, hidden_at FROM scores WHERE game = '$game' AND day = '$day' ORDER BY score DESC LIMIT 20"
+    d1 "SELECT id, player_id, score, duration_ms, held_at, hidden_at FROM scores WHERE game = '$game' AND day = '$day' ORDER BY score DESC LIMIT 20"
     ;;
   hide)
     id=${2:?score-id を指定する}
     [[ $id =~ ^[0-9]+$ ]] || { echo "score-id は数字" >&2; exit 1; }
     d1 "UPDATE scores SET hidden_at = $(date +%s%3N) WHERE id = $id"
+    ;;
+  held)
+    d1 "SELECT id, game, day, player_id, score, duration_ms, held_at FROM scores WHERE held_at IS NOT NULL AND hidden_at IS NULL ORDER BY held_at"
+    ;;
+  approve)
+    id=${2:?score-id を指定する}
+    [[ $id =~ ^[0-9]+$ ]] || { echo "score-id は数字" >&2; exit 1; }
+    d1 "UPDATE scores SET held_at = NULL WHERE id = $id"
     ;;
   find)
     name=${2:?名前の # の後ろ 4 文字を指定する}
@@ -45,7 +55,7 @@ case "${1:-}" in
     d1 "DELETE FROM scores WHERE player_id = '$id'; DELETE FROM players WHERE id = '$id'"
     ;;
   *)
-    sed -n '2,7p' "$0" >&2
+    sed -n '2,9p' "$0" >&2
     exit 1
     ;;
 esac
