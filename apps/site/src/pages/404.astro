@@ -3,8 +3,32 @@ import Base from '../layouts/Base.astro';
 ---
 
 <Base title="ページが見つかりません" noindex>
-  <h1>ページが見つかりません</h1>
-  <p>
-    <a href="/">トップに戻る</a>
-  </p>
+  <div class="not-found">
+    <img src="/logo.svg" alt="" width="96" height="96" />
+    <h1>ページが見つかりません</h1>
+    <p>URL が変わったか、ページが無くなったのかもしれません。</p>
+    <a class="button" href="/">
+      トップに戻る
+    </a>
+  </div>
 </Base>
+
+<style>
+  .not-found {
+    display: grid;
+    justify-items: center;
+    gap: 0.5rem;
+    padding: 3rem 0;
+    text-align: center;
+  }
+
+  h1 {
+    margin: 0.5rem 0 0;
+    font-size: 1.5rem;
+  }
+
+  p {
+    margin: 0 0 1rem;
+    color: var(--muted);
+  }
+</style>

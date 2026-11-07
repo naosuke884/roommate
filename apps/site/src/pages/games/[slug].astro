@@ -16,76 +16,135 @@ const { game } = Astro.props;
 ---
 
 <Base title={game.title} description={game.description}>
-  <h1>{game.title}</h1>
-  <p class="description">{game.description}</p>
+  <div class="hero">
+    <div class="thumb">
+      <img src="/logo.svg" alt="" width="72" height="72" />
+    </div>
+    <div class="intro">
+      <h1>{game.title}</h1>
+      <p class="description">{game.description}</p>
+      <!-- ゲームは配信用ドメインを直接開いて遊ぶ。戻るボタンでこのページへ戻れるよう、同じタブで移る -->
+      <a class="button" href={playUrl(game.slug)}>
+        遊ぶ
+      </a>
+    </div>
+  </div>
 
-  <!-- ゲームは配信用ドメインを直接開いて遊ぶ。戻るボタンでこのページへ戻れるよう、同じタブで移る -->
-  <a class="play" href={playUrl(game.slug)}>
-    遊ぶ
-  </a>
-
-  <section>
+  <section class="board">
     <h2>今日のランキング</h2>
     <Ranking client:load apiOrigin={API_ORIGIN} game={game.slug} />
   </section>
 </Base>
 
 <style>
-  .play {
-    display: inline-block;
-    padding: 0.75rem 2rem;
-    border-radius: 0.5rem;
-    background: var(--fg);
-    color: var(--bg);
-    font-weight: 700;
-    text-decoration: none;
+  .hero {
+    display: grid;
+    gap: 1.25rem;
+    margin: 0.5rem 0 2rem;
   }
 
-  .play:hover {
-    opacity: 0.85;
+  @media (min-width: 40rem) {
+    .hero {
+      grid-template-columns: minmax(0, 20rem) 1fr;
+      align-items: center;
+      gap: 2rem;
+    }
   }
 
-  .play:focus-visible {
-    outline: 2px solid var(--fg);
-    outline-offset: 2px;
+  .thumb {
+    display: grid;
+    place-items: center;
+    aspect-ratio: 16 / 9;
+    border-radius: var(--radius);
+    background: var(--soft);
+  }
+
+  .intro {
+    display: grid;
+    justify-items: start;
+    gap: 0.5rem;
+  }
+
+  h1 {
+    margin: 0;
+    font-family: var(--font-brand);
+    font-size: 2rem;
+    line-height: 1.2;
   }
 
   .description {
+    margin: 0 0 0.5rem;
     color: var(--muted);
   }
 
-  section {
-    margin-top: 2rem;
+  .board {
+    max-width: 36rem;
+    padding: 1.25rem 1.25rem 0.75rem;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    background: var(--surface);
   }
 
   h2 {
-    font-size: 1.125rem;
+    margin: 0 0 0.5rem;
+    font-size: 1rem;
   }
 
   :global(.ranking) {
-    list-style: none;
     margin: 0;
     padding: 0;
+    list-style: none;
   }
 
   :global(.ranking li) {
     display: grid;
-    grid-template-columns: 2.5rem 1fr auto;
-    gap: 0.5rem;
-    border-top: 1px solid var(--line);
+    grid-template-columns: 2rem 1fr auto;
+    align-items: center;
+    gap: 0.75rem;
     padding: 0.5rem 0;
+    border-top: 1px solid var(--line);
+  }
+
+  :global(.ranking li:first-child) {
+    border-top: 0;
   }
 
   :global(.ranking-rank) {
+    display: grid;
+    place-items: center;
+    width: 1.75rem;
+    height: 1.75rem;
+    border-radius: 50%;
     color: var(--muted);
+    font-size: 0.875rem;
     font-variant-numeric: tabular-nums;
+  }
+
+  /* 上位 3 人はシンボルの色の丸で囲む */
+  :global(.ranking li:nth-child(-n + 3) .ranking-rank) {
+    color: var(--on-accent);
+    font-weight: 700;
+  }
+
+  :global(.ranking li:nth-child(1) .ranking-rank) {
+    background: var(--apricot);
+  }
+
+  :global(.ranking li:nth-child(2) .ranking-rank) {
+    background: var(--overlap);
+  }
+
+  :global(.ranking li:nth-child(3) .ranking-rank) {
+    background: var(--butter);
   }
 
   :global(.ranking-score) {
     font-variant-numeric: tabular-nums;
+    font-weight: 700;
   }
 
   :global(.ranking-note) {
+    margin: 0 0 0.5rem;
     color: var(--muted);
   }
 </style>
