@@ -97,6 +97,8 @@ const ogImage = new URL('/og.png', Astro.site);
     color: var(--fg);
     font-family: system-ui, sans-serif;
     line-height: 1.7;
+    /* 日本語を文節で折り返し、「壁か/ら」のように語の途中で切らない */
+    word-break: auto-phrase;
     /* 中身が短いページでもフッターを画面の下に置く */
     display: flex;
     flex-direction: column;
