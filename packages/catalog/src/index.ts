@@ -19,7 +19,8 @@ export const games: readonly Game[] = [
   {
     slug: 'grapnl',
     title: 'grapnl',
-    description: '日替わりのコースを走り、同じコースを走った人と自己ベストを競う。',
+    description:
+      'ワイヤーを天井に刺し、振り子の勢いで右へ進むアクション。迫ってくる赤い壁から、どこまで逃げ切れるか。',
     maxScorePerSecond: 500,
     // 2026-11 時点の本番の最高は 6,591 点。迫る領域が速くなるので、数分のプレイで届く点数より十分上に置く
     holdScoreAbove: 30_000,
