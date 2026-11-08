@@ -5,7 +5,7 @@ import Playing from '../../components/Playing.tsx';
 import Ranking from '../../components/Ranking.tsx';
 import { API_ORIGIN } from '../../config.ts';
 import Base from '../../layouts/Base.astro';
-import { gameImages } from '../../games.ts';
+import { gameImages, gameOgImages } from '../../games.ts';
 
 export function getStaticPaths() {
   return games.map((game) => ({ params: { slug: game.slug }, props: { game } }));
@@ -17,9 +17,14 @@ interface Props {
 
 const { game } = Astro.props;
 const image = gameImages[game.slug];
+const ogPath = gameOgImages[game.slug];
 ---
 
-<Base title={game.title} description={game.description}>
+<Base
+  title={game.title}
+  description={game.description}
+  ogImage={ogPath ? { path: ogPath, alt: `${game.title} のプレイ画面` } : undefined}
+>
   <div class="hero">
     <div class="thumb">
       {image ? (
