@@ -10,7 +10,7 @@
     "deploy": "wrangler deploy"
   },
   "dependencies": {
-    "@astrojs/react": "^7.1.2",
+    "@astrojs/react": "^7.1.4",
     "@astrojs/sitemap": "^3.7.4",
     "@fontsource/zen-maru-gothic": "^5.3.1",
     "@roommate/catalog": "workspace:*",
