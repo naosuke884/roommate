@@ -10,7 +10,7 @@
   },
   "dependencies": {
     "@roommate/catalog": "workspace:*",
-    "hono": "^4.13.16"
+    "hono": "^4.13.19"
   },
   "devDependencies": {
     "@cloudflare/vitest-plugin": "^1.9.0",
